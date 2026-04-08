@@ -1,0 +1,1 @@
+{"session_id":"integ-session-001","tool_name":"Bash","tool_input":{"command":"ls -la"},"tool_response":{"exit_code":0,"duration_ms":50}}

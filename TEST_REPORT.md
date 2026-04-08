@@ -275,3 +275,50 @@ All `internal/` packages are now at or above 70% line coverage.
 ### Test counts (Phase C)
 
 **All tests pass. 0 failures. 6 environment-gated skips (unchanged from Phase B).**
+
+---
+
+## Phase D -- Integration tests
+
+**Performed: 2026-04-08**
+
+### Scope
+
+Phase D adds a real end-to-end integration test suite that exercises barq-witness by forking and exec-ing the compiled binary. No in-process function calls are used for CLI behaviour; all subcommands are invoked via `os/exec`.
+
+### Files created
+
+| File | Description |
+|------|-------------|
+| `tests/integration/testmain_test.go` | TestMain builds the binary once; shared helpers: run, record, makeGitRepo |
+| `tests/integration/helpers_test.go` | sessionFixture helper shared across test files |
+| `tests/integration/init_test.go` | Tests for barq-witness init (creates dirs, idempotent, fails outside git) |
+| `tests/integration/record_test.go` | Tests for all record subcommands via real stdin piping; DB verification via store.Open |
+| `tests/integration/report_test.go` | Tests for report --format text/markdown/json, --top flag, unknown format |
+| `tests/integration/full_session_test.go` | End-to-end: init -> record session -> report -> export -> version |
+| `tests/integration/explainer_test.go` | Explainer backend flags: null always works, claude/local fall back gracefully |
+| `tests/integration/migration_test.go` | Store migration tests: fresh DB, idempotent reopen, insert and reopen |
+| `tests/fixtures/hook-payloads/*.json` | Real hook payload fixtures using the actual Claude Code hook schema |
+| `tests/fixtures/golden/*.txt` | Golden output files for deterministic report checks |
+| `Makefile` | test-unit, test-integration, test, bench targets |
+| `.github/workflows/ci.yml` | CI workflow: unit job then integration job that needs unit |
+
+### Key design decisions
+
+- Binary is built once in TestMain into a temp directory; all tests share the same binary.
+- All filesystem state uses t.TempDir() (auto-cleaned by the test runner).
+- Git repos are created with real commits so barq-witness init can succeed.
+- Hook payload fixtures use the real PostToolUse schema (tool_name, tool_input, tool_response).
+- record subcommand uses stdin piping -- no mock, no in-process call.
+- Malformed JSON payloads are verified to exit 0 (hooks must never break Claude Code).
+- DB state is verified after record calls using store.Open directly.
+
+### Test counts (Phase D)
+
+| Suite | Tests | Pass | Fail | Skip |
+|-------|-------|------|------|------|
+| Unit (./internal/... ./cmd/...) | 141 | 141 | 0 | 6 |
+| Integration (./tests/integration/...) | 26 | 26 | 0 | 0 |
+| **Total** | **167** | **167** | **0** | **6** |
+
+**All integration tests pass. 0 failures. 0 skips.**

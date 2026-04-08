@@ -1,0 +1,1 @@
+{"session_id":"integ-session-001","tool_name":"Write","tool_input":{"file_path":"main.go","content":"package main\n\nfunc hello() { fmt.Println(\"hello\") }\n"}}
