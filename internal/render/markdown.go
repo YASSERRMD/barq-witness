@@ -68,6 +68,11 @@ func Markdown(w io.Writer, report *analyzer.Report, opts MarkdownOptions) error 
 			fmt.Fprintf(w, "| Flag | `%s` -- %s |\n", r, expandTemplate(r, seg))
 		}
 
+		// Explainer-provided (or deterministic fallback) explanation.
+		if seg.Explanation != "" {
+			fmt.Fprintf(w, "| Explanation | %s |\n", mdEscape(seg.Explanation))
+		}
+
 		// Prompt snippet.
 		if seg.PromptText != "" {
 			truncated := truncate(seg.PromptText, 200)

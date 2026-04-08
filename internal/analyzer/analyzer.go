@@ -34,6 +34,9 @@ type Segment struct {
 	Tier        int    // 1, 2, or 3 (0 = unscored)
 	ReasonCodes []string
 	Score       float64
+	// Explanation is populated by the optional explainer layer after analysis.
+	// It is never set by the analyzer itself and never affects Tier or Score.
+	Explanation string
 }
 
 // Report is the analysis output for a commit range.

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/yasserrmd/barq-witness/internal/analyzer"
+	"github.com/yasserrmd/barq-witness/internal/config"
+	"github.com/yasserrmd/barq-witness/internal/explainer"
 	"github.com/yasserrmd/barq-witness/internal/render"
 	"github.com/yasserrmd/barq-witness/internal/store"
 	"github.com/yasserrmd/barq-witness/internal/util"
@@ -16,11 +19,12 @@ import (
 // runReport implements `barq-witness report [flags]`.
 func runReport(args []string) {
 	var (
-		fromSHA   string
-		toSHA     string
-		commitSHA string
-		format    string // "text" or "markdown"
-		topN      = 10
+		fromSHA       string
+		toSHA         string
+		commitSHA     string
+		format        string // "text" or "markdown"
+		topN          = 10
+		explainerName string // "" | null | claude | groq | local
 	)
 
 	for i := 0; i < len(args); i++ {
@@ -53,9 +57,16 @@ func runReport(args []string) {
 					topN = n
 				}
 			}
+		case "--explainer":
+			i++
+			if i < len(args) {
+				explainerName = args[i]
+			}
 		default:
 			if strings.HasPrefix(args[i], "--format=") {
 				format = strings.TrimPrefix(args[i], "--format=")
+			} else if strings.HasPrefix(args[i], "--explainer=") {
+				explainerName = strings.TrimPrefix(args[i], "--explainer=")
 			}
 		}
 	}
@@ -74,10 +85,24 @@ func runReport(args []string) {
 	if err != nil {
 		fatalf("cannot determine working directory: %v", err)
 	}
-	dbPath := filepath.Join(cwd, ".witness", "trace.db")
+	witnessDir := filepath.Join(cwd, ".witness")
+	dbPath := filepath.Join(witnessDir, "trace.db")
 	if envBase := os.Getenv("CLAUDE_PROJECT_DIR"); envBase != "" {
-		dbPath = filepath.Join(envBase, ".witness", "trace.db")
 		cwd = envBase
+		witnessDir = filepath.Join(cwd, ".witness")
+		dbPath = filepath.Join(witnessDir, "trace.db")
+	}
+
+	// Load config.
+	cfg, err := config.Load(witnessDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not load config.toml: %v\n", err)
+		cfg = config.Default()
+	}
+
+	// CLI flag overrides config file.
+	if explainerName != "" {
+		cfg.Explainer.Backend = explainerName
 	}
 
 	// Resolve HEAD reference to a real SHA when the user passes "HEAD".
@@ -104,6 +129,11 @@ func runReport(args []string) {
 	if err != nil {
 		fatalf("analyze: %v", err)
 	}
+
+	// Run the explainer over the segments (always completes even on error).
+	exp := explainer.New(cfg, witnessDir)
+	defer exp.Close()
+	explainer.EnrichSegments(context.Background(), exp, report.Segments)
 
 	// Choose format.
 	if format == "" {
@@ -133,8 +163,8 @@ func runReport(args []string) {
 	}
 }
 
-// resolveRef resolves a git ref (e.g. HEAD, branch name) to a SHA using go-git.
-func resolveRef(repoPath, ref string) (string, error) {
+// resolveRef resolves a git ref to a SHA using go-git.
+func resolveRef(repoPath, _ string) (string, error) {
 	return util.HeadSHA(repoPath)
 }
 
@@ -147,7 +177,7 @@ func isTTY() bool {
 	return (fi.Mode() & os.ModeCharDevice) != 0
 }
 
-// resolveCommitRange prints a user-friendly error when the range is unusable.
+// validateRange prints a user-friendly error when the range is unusable.
 func validateRange(from, to string) error {
 	if to == "" {
 		return fmt.Errorf("could not determine target commit (use --commit or --to)")
