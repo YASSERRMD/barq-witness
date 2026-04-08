@@ -2,7 +2,7 @@
 // All timestamps are Unix milliseconds (int64).
 package model
 
-// Session represents a single Claude Code session.
+// Session represents a single AI coding session.
 type Session struct {
 	ID           string
 	StartedAt    int64
@@ -11,6 +11,9 @@ type Session struct {
 	GitHeadStart string
 	GitHeadEnd   *string
 	Model        string
+	// Source identifies the AI coding tool that produced this session.
+	// Defaults to "claude-code" for backwards compatibility.
+	Source string
 }
 
 // Prompt represents a user prompt submitted during a session.
