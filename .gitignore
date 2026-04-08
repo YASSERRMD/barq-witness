@@ -14,3 +14,7 @@ dist/
 # OS artifacts
 .DS_Store
 Thumbs.db
+
+# Test coverage artifacts
+coverage.out
+coverage.txt
