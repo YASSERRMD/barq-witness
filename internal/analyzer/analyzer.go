@@ -14,6 +14,14 @@ import (
 	"github.com/yasserrmd/barq-witness/internal/store"
 )
 
+// PluginSignal is a risk signal returned by an external plugin.
+// It mirrors plugin.Signal but is defined here to avoid a circular import.
+type PluginSignal struct {
+	Code    string
+	Tier    int
+	Message string
+}
+
 // AnalyzeOptions controls optional behaviour for AnalyzeWithOptions.
 type AnalyzeOptions struct {
 	// Matcher is the optional intent-matching backend. nil disables the signal.
@@ -21,6 +29,10 @@ type AnalyzeOptions struct {
 	// Threshold is the score below which PROMPT_DIFF_MISMATCH fires.
 	// A zero value defaults to 0.5.
 	Threshold float64
+	// PluginRunner is an optional function that runs all configured plugins
+	// against a segment and returns their signals.  nil means no plugins.
+	// Plugin signal codes must already carry the "plugin:" prefix.
+	PluginRunner func(ctx context.Context, seg Segment) []PluginSignal
 }
 
 // Segment represents one reviewed unit: a contiguous set of lines in a file
@@ -197,6 +209,28 @@ func AnalyzeWithOptions(st *store.Store, repoPath, fromSHA, toSHA string, opts A
 				seg.Score += WeightTier2
 				// Re-compute tier to account for the new reason code.
 				seg.Tier = computeTier(seg.ReasonCodes)
+			}
+		}
+
+		// --- Optional: plugin signals ---------------------------------------
+		// Call each registered external plugin and merge their signals.
+		if opts.PluginRunner != nil {
+			pluginSignals := opts.PluginRunner(context.Background(), seg)
+			for _, ps := range pluginSignals {
+				seg.ReasonCodes = append(seg.ReasonCodes, ps.Code)
+				// Map plugin tier to score weight.
+				switch ps.Tier {
+				case 1:
+					seg.Score += WeightTier1
+				case 2:
+					seg.Score += WeightTier2
+				default:
+					seg.Score += WeightTier3
+				}
+				// Update tier: lower tier number = higher severity.
+				if seg.Tier == 0 || ps.Tier < seg.Tier {
+					seg.Tier = ps.Tier
+				}
 			}
 		}
 
