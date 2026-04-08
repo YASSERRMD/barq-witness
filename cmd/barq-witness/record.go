@@ -3,6 +3,10 @@ package main
 // record.go implements the five `barq-witness record <event>` subcommands
 // that Claude Code hook scripts invoke.  Every subcommand MUST exit 0 even
 // on internal errors; errors are appended to .witness/barq-witness.log.
+//
+// Daemon fallback: if a daemon is running on .witness/daemon.sock, events are
+// forwarded to it via the Unix socket instead of opening SQLite directly.
+// If the daemon is not running, the existing direct SQLite write is used.
 
 import (
 	"encoding/json"
@@ -17,6 +21,7 @@ import (
 
 	"github.com/sergi/go-diff/diffmatchpatch"
 
+	"github.com/yasserrmd/barq-witness/internal/daemon"
 	"github.com/yasserrmd/barq-witness/internal/hooks"
 	"github.com/yasserrmd/barq-witness/internal/model"
 	"github.com/yasserrmd/barq-witness/internal/store"
@@ -83,6 +88,38 @@ func openStore(dbPath string, logger interface{ Printf(string, ...any) }) *store
 	return s
 }
 
+// dialDaemon attempts to connect to a running daemon at the socket in
+// witnessDir. Returns nil (not an error) if the daemon is not running --
+// callers should fall back to direct SQLite writes in that case.
+func dialDaemon(witnessDir string) *daemon.Client {
+	socketPath := filepath.Join(witnessDir, "daemon.sock")
+	c, err := daemon.Dial(socketPath)
+	if err != nil {
+		return nil
+	}
+	if !c.Ping() {
+		c.Close()
+		return nil
+	}
+	return c
+}
+
+// sendToDaemon sends a message via the client and returns true on success.
+func sendToDaemon(c *daemon.Client, msg map[string]any, logger interface{ Printf(string, ...any) }, op string) bool {
+	resp, err := c.Send(msg)
+	if err != nil {
+		logger.Printf("%s: daemon send: %v", op, err)
+		return false
+	}
+	ok, _ := resp["ok"].(bool)
+	if !ok {
+		errMsg, _ := resp["error"].(string)
+		logger.Printf("%s: daemon error: %s", op, errMsg)
+		return false
+	}
+	return true
+}
+
 // ---- session-start ----------------------------------------------------------
 
 func recordSessionStart(data []byte, dbPath, witnessDir string, logger interface{ Printf(string, ...any) }) {
@@ -98,6 +135,21 @@ func recordSessionStart(data []byte, dbPath, witnessDir string, logger interface
 	}
 
 	head, _ := util.HeadSHA(cwd)
+
+	// Try daemon first.
+	if c := dialDaemon(witnessDir); c != nil {
+		defer c.Close()
+		msg := map[string]any{
+			"op":         "session_start",
+			"session_id": p.SessionID,
+			"cwd":        cwd,
+			"model":      p.Model,
+			"git_head":   head,
+		}
+		if sendToDaemon(c, msg, logger, "session-start") {
+			return
+		}
+	}
 
 	s := openStore(dbPath, logger)
 	defer s.Close()
@@ -123,12 +175,29 @@ func recordPrompt(data []byte, dbPath string, logger interface{ Printf(string, .
 		os.Exit(0)
 	}
 
+	witnessDir := filepath.Dir(dbPath)
+	now := time.Now().UnixMilli()
+
+	// Try daemon first.
+	if c := dialDaemon(witnessDir); c != nil {
+		defer c.Close()
+		msg := map[string]any{
+			"op":         "prompt",
+			"session_id": p.SessionID,
+			"content":    p.Prompt,
+			"timestamp":  now,
+		}
+		if sendToDaemon(c, msg, logger, "prompt") {
+			return
+		}
+	}
+
 	s := openStore(dbPath, logger)
 	defer s.Close()
 
 	prompt := model.Prompt{
 		SessionID:   p.SessionID,
-		Timestamp:   time.Now().UnixMilli(),
+		Timestamp:   now,
 		Content:     p.Prompt,
 		ContentHash: util.SHA256HexString(p.Prompt),
 	}
@@ -144,18 +213,6 @@ func recordEdit(data []byte, dbPath string, logger interface{ Printf(string, ...
 	if err != nil {
 		logger.Printf("edit: parse: %v", err)
 		os.Exit(0)
-	}
-
-	s := openStore(dbPath, logger)
-	defer s.Close()
-
-	latest, err := s.LatestPromptForSession(p.SessionID)
-	if err != nil {
-		logger.Printf("edit: latest prompt: %v", err)
-	}
-	var promptID *int64
-	if latest != nil {
-		promptID = &latest.ID
 	}
 
 	var before, after string
@@ -180,11 +237,48 @@ func recordEdit(data []byte, dbPath string, logger interface{ Printf(string, ...
 
 	diffStr := computeUnifiedDiff(before, after)
 	lineStart, lineEnd := computeLineRange(p.ToolInput.FilePath, p.ToolInput.OldString, before, after)
+	now := time.Now().UnixMilli()
+
+	witnessDir := filepath.Dir(dbPath)
+
+	// Try daemon first.
+	if c := dialDaemon(witnessDir); c != nil {
+		defer c.Close()
+		msg := map[string]any{
+			"op":         "edit",
+			"session_id": p.SessionID,
+			"file_path":  p.ToolInput.FilePath,
+			"tool":       p.ToolName,
+			"diff":       diffStr,
+			"timestamp":  now,
+		}
+		if lineStart != nil {
+			msg["line_start"] = *lineStart
+		}
+		if lineEnd != nil {
+			msg["line_end"] = *lineEnd
+		}
+		if sendToDaemon(c, msg, logger, "edit") {
+			return
+		}
+	}
+
+	s := openStore(dbPath, logger)
+	defer s.Close()
+
+	latest, err := s.LatestPromptForSession(p.SessionID)
+	if err != nil {
+		logger.Printf("edit: latest prompt: %v", err)
+	}
+	var promptID *int64
+	if latest != nil {
+		promptID = &latest.ID
+	}
 
 	edit := model.Edit{
 		SessionID:  p.SessionID,
 		PromptID:   promptID,
-		Timestamp:  time.Now().UnixMilli(),
+		Timestamp:  now,
 		FilePath:   p.ToolInput.FilePath,
 		Tool:       p.ToolName,
 		BeforeHash: util.SHA256HexString(before),
@@ -210,12 +304,35 @@ func recordExec(data []byte, dbPath string, logger interface{ Printf(string, ...
 	cmd := p.ToolInput.Command
 	class := classifyCommand(cmd)
 	touched := extractFilesTouched(cmd)
-
 	touchedJSON, _ := json.Marshal(touched)
+	now := time.Now().UnixMilli()
+
+	witnessDir := filepath.Dir(dbPath)
+
+	// Try daemon first.
+	if c := dialDaemon(witnessDir); c != nil {
+		defer c.Close()
+		msg := map[string]any{
+			"op":             "execution",
+			"session_id":     p.SessionID,
+			"command":        cmd,
+			"classification": class,
+			"timestamp":      now,
+		}
+		if p.ToolResponse.ExitCode != nil {
+			msg["exit_code"] = *p.ToolResponse.ExitCode
+		}
+		if p.ToolResponse.DurationMS != nil {
+			msg["duration_ms"] = *p.ToolResponse.DurationMS
+		}
+		if sendToDaemon(c, msg, logger, "exec") {
+			return
+		}
+	}
 
 	x := model.Execution{
 		SessionID:      p.SessionID,
-		Timestamp:      time.Now().UnixMilli(),
+		Timestamp:      now,
 		Command:        cmd,
 		Classification: class,
 		FilesTouched:   string(touchedJSON),
@@ -246,6 +363,18 @@ func recordSessionEnd(data []byte, dbPath, witnessDir string, logger interface{ 
 	}
 
 	head, _ := util.HeadSHA(cwd)
+
+	// Try daemon first.
+	if c := dialDaemon(witnessDir); c != nil {
+		defer c.Close()
+		msg := map[string]any{
+			"op":         "session_end",
+			"session_id": p.SessionID,
+		}
+		if sendToDaemon(c, msg, logger, "session-end") {
+			return
+		}
+	}
 
 	s := openStore(dbPath, logger)
 	defer s.Close()
