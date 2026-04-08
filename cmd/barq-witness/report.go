@@ -11,6 +11,7 @@ import (
 	"github.com/yasserrmd/barq-witness/internal/analyzer"
 	"github.com/yasserrmd/barq-witness/internal/config"
 	"github.com/yasserrmd/barq-witness/internal/explainer"
+	"github.com/yasserrmd/barq-witness/internal/plugin"
 	"github.com/yasserrmd/barq-witness/internal/render"
 	"github.com/yasserrmd/barq-witness/internal/store"
 	"github.com/yasserrmd/barq-witness/internal/util"
@@ -135,6 +136,26 @@ func runReport(args []string) {
 	}
 	if cfg.Analyzer.EnableIntentMatching && exp.Name() != "null" {
 		analyzeOpts.Matcher = &explainerIntentAdapter{exp: exp}
+	}
+
+	// Wire external plugins from config.
+	if len(cfg.Plugins) > 0 {
+		plugins := make([]plugin.Plugin, 0, len(cfg.Plugins))
+		for _, pe := range cfg.Plugins {
+			plugins = append(plugins, plugin.Plugin{Name: pe.Name, Path: pe.Path})
+		}
+		analyzeOpts.PluginRunner = func(ctx context.Context, seg analyzer.Segment) []analyzer.PluginSignal {
+			raw := plugin.RunAll(ctx, plugins, seg)
+			out := make([]analyzer.PluginSignal, 0, len(raw))
+			for _, s := range raw {
+				out = append(out, analyzer.PluginSignal{
+					Code:    s.Code,
+					Tier:    s.Tier,
+					Message: s.Message,
+				})
+			}
+			return out
+		}
 	}
 
 	// Run the analyzer.

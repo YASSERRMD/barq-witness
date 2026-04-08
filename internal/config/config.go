@@ -12,12 +12,19 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+// PluginEntry describes a single external plugin executable.
+type PluginEntry struct {
+	Name string `toml:"name"`
+	Path string `toml:"path"`
+}
+
 // Config is the top-level structure for .witness/config.toml.
 type Config struct {
 	Explainer ExplainerConfig `toml:"explainer"`
 	Analyzer  AnalyzerConfig  `toml:"analyzer"`
 	Privacy   PrivacyConfig   `toml:"privacy"`
 	Sync      SyncConfig      `toml:"sync"`
+	Plugins   []PluginEntry   `toml:"plugins"`
 }
 
 // ExplainerConfig controls the optional LLM explainer backend.
