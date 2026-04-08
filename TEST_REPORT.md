@@ -202,3 +202,76 @@ The test count increased from 87 (Phase A) to 141 (Phase B) because Phase A coun
 ### Final test count (Phase B)
 
 **141 passed, 0 failed, 6 skipped**
+
+---
+
+## Phase C -- Coverage backfill
+
+**Performed: 2026-04-08**
+
+### Scope
+
+Phase C goal was to bring every `internal/` package above 70% line coverage by adding happy-path and error-path tests for previously untested or under-covered packages.
+
+### New test files added
+
+| File | Packages covered |
+|------|-----------------|
+| `internal/testutil/testutil.go` + `testutil_test.go` | Shared test helpers (NewFixtureStore, NewFixtureRepo, NewFixtureSession) |
+| `internal/model/model_test.go` | Session, Prompt, Edit, Execution zero-value and pointer-field roundtrips |
+| `internal/util/util_test.go` | HeadSHA, SHA256Hex, SHA256HexString, OpenLogger |
+| `internal/diff/diff_test.go` | ChangedFiles, ChangedFilePaths, FileChange fields, initial-commit IsNew |
+| `internal/store/store_extra_test.go` | AllSessions, PromptsForSession, PromptByID, EditsForSession, EditByID, GetStats, RecentSessions |
+| `internal/explainer/explainer_extra_test.go` | LocalExplainer HTTP paths, reason codes, privacy mode, GroqExplainer Available |
+| `internal/explainer/explainer_http_test.go` | EdgeExplainer Explain/IntentMatch/CacheHit, ClaudeExplainer Name/Available/Close, EnrichSegments |
+| `internal/explainer/internal_test.go` | ClaudeExplainer.Explain, GroqExplainer.Explain, lruCache, buildExplainPrompt, buildIntentPrompt, parseIntentJSON, extractText helpers |
+| `internal/mcp/mcp_extra_test.go` | barq_get_segment, barq_list_sessions, barq_get_stats, unknown method, malformed JSON |
+| `internal/daemon/daemon_extra_test.go` | handlePrompt, handleExecution, unknown op, invalid JSON, session start/end, edit with prompt linkage, IsDaemonRunning |
+| `internal/server/server_extra_test.go` | handleIngest (all error paths), handleStats, handleDashboard, Stop nil-server, queryStats, tier aggregation |
+| `internal/watcher/watcher_extra_test.go` | markdown format, real git repo poll, text format, zero topN |
+| `plugins/no-prod-secrets/secrets_extra_test.go` | ScanForSecrets multiline, boundary, variants, both patterns, diff context |
+| `plugins/license-header-check/license_extra_test.go` | CheckMissingLicenseHeader all edge cases (SPDX, copyright, empty, subdirectory, test files) |
+| `internal/adapters/codex/codex_extra_test.go` | New, Source, RecordSession/Edit/Execution/Prompt NoOp, ImportFromLog all paths |
+| `internal/cgpf/cgpf_extra_test.go` | Privacy mode, non-privacy, repo path detection, specific session ID, round-trip marshal, FilesTouched |
+
+### Coverage by package (before -> after)
+
+| Package | Phase A | Phase C |
+|---------|---------|---------|
+| internal/adapters/aider | 83.2% | 83.2% |
+| internal/adapters/claudecode | 82.1% | 82.1% |
+| internal/adapters/codex | 63.3% | 93.9% |
+| internal/adapters/cursor | 75.5% | 75.5% |
+| internal/analyzer | 88.1% | 88.1% |
+| internal/cgpf | 62.8% | 74.4% |
+| internal/config | 81.2% | 81.2% |
+| internal/daemon | 61.6% | 90.1% |
+| internal/diff | 0% (no tests) | 79.6% |
+| internal/explainer | 37.1% | 89.7% |
+| internal/hooks | 87.5% | 87.5% |
+| internal/installer | 80.3% | 80.3% |
+| internal/mcp | 42.6% | 75.0% |
+| internal/model | 0% (no tests) | 100.0% |
+| internal/plugin | 91.7% | 91.7% |
+| internal/render | 81.9% | 81.9% |
+| internal/server | 57.1% | 74.8% |
+| internal/store | 54.8% | 80.5% |
+| internal/testutil | 0% (no tests) | 81.0% |
+| internal/util | 0% (no tests) | 100.0% |
+| internal/watcher | 59.1% | 81.8% |
+| plugins/license-header-check | 23.5% | 71.2% |
+| plugins/no-prod-secrets | 3.7% | 72.4% |
+| **Total** | **63.2%** | **81.9%** |
+
+### Packages below 70% (remaining)
+
+| Package | Coverage | Note |
+|---------|----------|------|
+| plugins/license-header-check | 71.2% | `main()` and `writeResponse()` require process-level integration testing; not feasible in unit tests |
+| plugins/no-prod-secrets | 72.4% | Same -- `main()` reads from os.Stdin and is untestable without a subprocess harness |
+
+All `internal/` packages are now at or above 70% line coverage.
+
+### Test counts (Phase C)
+
+**All tests pass. 0 failures. 6 environment-gated skips (unchanged from Phase B).**
