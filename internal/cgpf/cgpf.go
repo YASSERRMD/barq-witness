@@ -1,4 +1,4 @@
-// Package cgpf implements the Code Generation Provenance Format (CGPF) v0.1.
+// Package cgpf implements the Code Generation Provenance Format (CGPF) v1.0.
 // CGPF is the stable, portable JSON export format for barq-witness traces.
 package cgpf
 
@@ -16,7 +16,7 @@ import (
 )
 
 // Version is the CGPF spec version this package implements.
-const Version = "0.3"
+const Version = "1.0"
 
 // BinaryVersion is set by the main package at build time.
 var BinaryVersion = "vDEV"

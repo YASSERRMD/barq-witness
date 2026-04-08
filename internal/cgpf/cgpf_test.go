@@ -239,7 +239,7 @@ func TestMarshal_GoldenFields(t *testing.T) {
 	}
 
 	mustContain(`"cgpf_version"`)
-	mustContain(`"0.3"`)
+	mustContain(`"1.0"`)
 	mustContain(`"generated_by"`)
 	mustContain(`"generated_at"`)
 	mustContain(`"sessions"`)
@@ -258,7 +258,7 @@ func TestExport_EmptyStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Export empty: %v", err)
 	}
-	if doc.CGPFVersion != "0.3" {
+	if doc.CGPFVersion != "1.0" {
 		t.Errorf("CGPFVersion = %q", doc.CGPFVersion)
 	}
 	if doc.Sessions != nil && len(doc.Sessions) != 0 {

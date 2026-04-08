@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-const version = "v0.1.0"
+var version = "v1.0.0"
 
 func main() {
 	// Hidden flag used by `daemon start` to re-exec this binary as the server
