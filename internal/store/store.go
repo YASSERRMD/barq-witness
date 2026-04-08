@@ -181,6 +181,41 @@ func (s *Store) EditsForFiles(files []string) ([]model.Edit, error) {
 	return scanEdits(rows)
 }
 
+// PromptByID returns the prompt with the given id, or nil if not found.
+func (s *Store) PromptByID(id int64) (*model.Prompt, error) {
+	row := s.db.QueryRow(
+		`SELECT id, session_id, timestamp, content, content_hash
+		 FROM prompts WHERE id = ?`, id,
+	)
+	p := &model.Prompt{}
+	err := row.Scan(&p.ID, &p.SessionID, &p.Timestamp, &p.Content, &p.ContentHash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+// EditsForSession returns all edit rows for the given session,
+// ordered by timestamp ascending.
+func (s *Store) EditsForSession(sessionID string) ([]model.Edit, error) {
+	rows, err := s.db.Query(
+		`SELECT id, session_id, prompt_id, timestamp, file_path, tool,
+		        before_hash, after_hash, line_start, line_end, diff
+		 FROM edits
+		 WHERE session_id = ?
+		 ORDER BY timestamp ASC`,
+		sessionID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanEdits(rows)
+}
+
 // ExecutionsForSession returns all execution rows for the given session,
 // ordered by timestamp ascending.
 func (s *Store) ExecutionsForSession(sessionID string) ([]model.Execution, error) {
