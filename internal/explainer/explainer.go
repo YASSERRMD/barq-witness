@@ -59,6 +59,9 @@ func New(cfg *config.Config, witnessDir string) Explainer {
 	case "local":
 		e = NewLocal(cfg.Explainer.Model, cfg.Explainer.Endpoint,
 			cfg.Explainer.TimeoutMS, logger, privacy)
+	case "edge":
+		e = NewEdge(cfg.Explainer.Model, cfg.Explainer.Endpoint,
+			cfg.Explainer.TimeoutMS, logger, privacy)
 	default:
 		return NewNull()
 	}
