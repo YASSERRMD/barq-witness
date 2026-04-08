@@ -1,0 +1,39 @@
+# barq-witness example workflow
+#
+# Copy this file to your repository at .github/workflows/barq-witness.yml
+# to get AI-provenance attention maps posted as PR comments.
+#
+# Prerequisites:
+#   1. Run `barq-witness init` in your repository root.
+#   2. Commit the resulting .claude/settings.json (not .witness/).
+#   3. Use Claude Code normally -- hooks will record the trace automatically.
+
+name: barq-witness attention map
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  barq-witness:
+    name: Risk-score AI-generated changes
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          # Fetch enough history for the diff.
+          fetch-depth: 0
+
+      - name: Run barq-witness attention map
+        uses: YASSERRMD/barq-witness@main
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          top-n: 10
+          comment-mode: update
+          barq-witness-version: v0.1.0

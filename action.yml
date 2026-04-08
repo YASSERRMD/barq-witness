@@ -1,0 +1,141 @@
+name: barq-witness
+description: >
+  Post a deterministic AI-provenance attention map as a PR comment.
+  Reads the .witness/trace.db produced by barq-witness hooks and runs
+  the risk scorer against the PR diff.  No LLM.  No network calls
+  beyond downloading the binary and posting the comment.
+
+author: Mohamed Yasser (yasserrmd)
+
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  github-token:
+    description: >
+      GitHub token used to post the PR comment.
+      Pass secrets.GITHUB_TOKEN.
+    required: true
+
+  top-n:
+    description: Number of top-scored segments to include in the comment.
+    required: false
+    default: "10"
+
+  comment-mode:
+    description: >
+      How to handle existing barq-witness comments.
+      "update" replaces the previous comment; "new" always posts a new one.
+    required: false
+    default: "update"
+
+  barq-witness-version:
+    description: >
+      Version of barq-witness to download from GitHub Releases.
+      Defaults to the latest release tag.
+    required: false
+    default: "v0.1.0"
+
+runs:
+  using: composite
+  steps:
+    - name: Download barq-witness binary
+      shell: bash
+      run: |
+        VERSION="${{ inputs.barq-witness-version }}"
+        OS="linux"
+        ARCH="amd64"
+        BINARY_URL="https://github.com/YASSERRMD/barq-witness/releases/download/${VERSION}/barq-witness-${OS}-${ARCH}"
+        echo "Downloading barq-witness ${VERSION} from ${BINARY_URL}"
+        curl -fsSL -o /usr/local/bin/barq-witness "${BINARY_URL}"
+        chmod +x /usr/local/bin/barq-witness
+        barq-witness version
+
+    - name: Check for trace database
+      id: check-trace
+      shell: bash
+      run: |
+        if [ -f ".witness/trace.db" ]; then
+          echo "trace_exists=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "trace_exists=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Post missing-trace comment
+      if: steps.check-trace.outputs.trace_exists == 'false'
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const body = `<!-- barq-witness:comment-marker -->
+          ## barq-witness attention map
+
+          No trace found (\`.witness/trace.db\` is missing from the PR head).
+
+          To enable barq-witness provenance tracking, run the following in your repository:
+
+          \`\`\`bash
+          barq-witness init
+          \`\`\`
+
+          Then use Claude Code normally. The trace will be captured automatically via hooks.
+          `;
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body: body.trim(),
+          });
+
+    - name: Generate attention map
+      if: steps.check-trace.outputs.trace_exists == 'true'
+      shell: bash
+      run: |
+        barq-witness report \
+          --from "${{ github.event.pull_request.base.sha }}" \
+          --to   "${{ github.event.pull_request.head.sha }}" \
+          --format markdown \
+          --top "${{ inputs.top-n }}" \
+          > /tmp/barq-report.md
+        echo "Report generated ($(wc -l < /tmp/barq-report.md) lines)"
+
+    - name: Post or update PR comment
+      if: steps.check-trace.outputs.trace_exists == 'true'
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const fs = require('fs');
+          const reportBody = fs.readFileSync('/tmp/barq-report.md', 'utf8');
+          const marker = '<!-- barq-witness:comment-marker -->';
+
+          if ('${{ inputs.comment-mode }}' === 'update') {
+            // Find existing barq-witness comment.
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.data.find(c => c.body.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: reportBody,
+              });
+              console.log('Updated existing barq-witness comment:', existing.id);
+              return;
+            }
+          }
+
+          // Post a new comment.
+          const result = await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body: reportBody,
+          });
+          console.log('Posted new barq-witness comment:', result.data.id);
