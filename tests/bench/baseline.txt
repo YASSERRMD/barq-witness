@@ -1,0 +1,27 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/yasserrmd/barq-witness/tests/bench
+cpu: Apple M4
+BenchmarkAnalyzeSmall-10            	   59816	     20081 ns/op	    7630 B/op	     127 allocs/op
+BenchmarkAnalyzeSmall-10            	   59697	     20281 ns/op	    7630 B/op	     127 allocs/op
+BenchmarkAnalyzeSmall-10            	   58108	     20376 ns/op	    7598 B/op	     127 allocs/op
+BenchmarkAnalyzeMedium-10           	   58459	     20561 ns/op	    7630 B/op	     127 allocs/op
+BenchmarkAnalyzeMedium-10           	   57602	     20689 ns/op	    7630 B/op	     127 allocs/op
+BenchmarkAnalyzeMedium-10           	   58030	     20689 ns/op	    7630 B/op	     127 allocs/op
+BenchmarkReportSmall-10             	  102038	     11894 ns/op	    3386 B/op	     240 allocs/op
+BenchmarkReportSmall-10             	  101134	     11872 ns/op	    3386 B/op	     240 allocs/op
+BenchmarkReportSmall-10             	   99915	     11972 ns/op	    3386 B/op	     240 allocs/op
+BenchmarkReportMedium-10            	   10000	    109835 ns/op	   32216 B/op	    2310 allocs/op
+BenchmarkReportMedium-10            	   10000	    109582 ns/op	   32216 B/op	    2310 allocs/op
+BenchmarkReportMedium-10            	   10000	    109238 ns/op	   32216 B/op	    2310 allocs/op
+BenchmarkStoreInsertEdit-10         	      22	  49401165 ns/op	  702520 B/op	   15746 allocs/op
+BenchmarkStoreInsertEdit-10         	      22	  49605528 ns/op	  702501 B/op	   15746 allocs/op
+BenchmarkStoreInsertEdit-10         	      22	  50515199 ns/op	  702531 B/op	   15747 allocs/op
+BenchmarkStoreQuerySessions-10      	    1147	   1013156 ns/op	  493568 B/op	   16028 allocs/op
+BenchmarkStoreQuerySessions-10      	    1160	   1014716 ns/op	  493565 B/op	   16028 allocs/op
+BenchmarkStoreQuerySessions-10      	    1171	   1064745 ns/op	  493567 B/op	   16028 allocs/op
+BenchmarkStoreEditsForSession-10    	     829	   1426912 ns/op	  798882 B/op	   16780 allocs/op
+BenchmarkStoreEditsForSession-10    	     832	   1422833 ns/op	  798882 B/op	   16780 allocs/op
+BenchmarkStoreEditsForSession-10    	     842	   1424453 ns/op	  798881 B/op	   16780 allocs/op
+PASS
+ok  	github.com/yasserrmd/barq-witness/tests/bench	36.706s

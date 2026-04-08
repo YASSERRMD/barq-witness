@@ -1,0 +1,28 @@
+{
+  "id": "codex-compat-session-001",
+  "model": "code-davinci-002",
+  "cwd": "/home/user/codex-project",
+  "created_at": 1700010000000,
+  "patches": [
+    {
+      "file": "server.go",
+      "patch": "+func startServer(port int) error {\n+\treturn http.ListenAndServe(fmt.Sprintf(\":%d\", port), nil)\n+}",
+      "timestamp": 1700010500000,
+      "accepted_ms": 2000
+    },
+    {
+      "file": "handler.go",
+      "patch": "+func rootHandler(w http.ResponseWriter, r *http.Request) {\n+\tfmt.Fprintf(w, \"OK\")\n+}",
+      "timestamp": 1700011000000,
+      "accepted_ms": 1200
+    }
+  ],
+  "executions": [
+    {
+      "cmd": "go test ./...",
+      "exit_code": 0,
+      "duration_ms": 1500,
+      "timestamp": 1700012000000
+    }
+  ]
+}

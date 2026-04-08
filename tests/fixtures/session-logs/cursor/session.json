@@ -1,0 +1,38 @@
+{
+  "session_id": "cursor-compat-session-001",
+  "model": "cursor-gpt-4",
+  "cwd": "/home/user/cursor-project",
+  "events": [
+    {
+      "type": "edit",
+      "file": "main.go",
+      "diff": "+package main\n+\n+import \"fmt\"\n+\n+func main() { fmt.Println(\"hello\") }",
+      "timestamp": 1700001000000,
+      "accepted": true,
+      "accept_delay_ms": 3000
+    },
+    {
+      "type": "edit",
+      "file": "util.go",
+      "diff": "+func add(a, b int) int { return a + b }",
+      "timestamp": 1700002000000,
+      "accepted": true,
+      "accept_delay_ms": 1500
+    },
+    {
+      "type": "edit",
+      "file": "rejected.go",
+      "diff": "+// this was rejected",
+      "timestamp": 1700002500000,
+      "accepted": false,
+      "accept_delay_ms": 0
+    },
+    {
+      "type": "command",
+      "command": "go build ./...",
+      "exit_code": 0,
+      "duration_ms": 800,
+      "timestamp": 1700003000000
+    }
+  ]
+}

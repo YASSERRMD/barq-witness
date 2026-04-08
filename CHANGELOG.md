@@ -2,6 +2,21 @@
 
 All notable changes to barq-witness are documented here.
 
+## [1.1.1] - 2026-04-08
+
+### Test hardening pass
+
+- Added internal/testutil package with shared test helpers (NewFixtureStore, NewFixtureRepo, NewFixtureSession)
+- Brought total test coverage from 63.2% to 81.9% across all internal packages
+- Added 26 integration tests in tests/integration/ (binary fork+exec, real git repos)
+- Added migration test suite in tests/migration/ verifying schema upgrades are clean and idempotent
+- Added performance benchmarks in tests/bench/ with committed baseline
+- Added adapter and explainer compatibility tests in tests/compat/
+- Fixed zero data races (go test -race clean throughout)
+- Fixed zero vet issues (go vet clean throughout)
+- All 9 previously uncovered reason codes now verified by tests
+- Final test count: 359 tests, 8 skips, 0 failures
+
 ## [1.1.0] - 2026-04-08
 
 ### Added
