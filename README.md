@@ -1,168 +1,150 @@
 # barq-witness
 
-**Local-first provenance recorder for Claude Code sessions.**
+> Local-first AI code provenance recorder. Every edit your AI coding tool makes is recorded, scored, and surfaced -- no cloud required.
 
-barq-witness hooks into Claude Code as a passive observer, capturing every
-prompt, file edit, and command execution into a local SQLite trace. From that
-trace and the git diff of a commit range, it produces a deterministic,
-risk-weighted attention map that tells code reviewers exactly which
-AI-generated segments deserve the most scrutiny -- and why.
+barq-witness hooks into Claude Code (and other AI coding tools) and writes a tamper-evident local trace of every prompt, edit, and test execution. At report time a deterministic engine scores each segment by risk tier, so you know exactly which AI-generated changes deserve a second look -- without sending a single byte to an LLM unless you explicitly opt in.
 
-**Status: pre-alpha.** Looking for early users and feedback.
-
----
-
-## Why does it exist?
-
-When developers use Claude Code heavily, the volume of AI-generated changes
-outpaces their ability to read and understand each one. This is comprehension
-debt: code that looks correct, passes CI, but was never truly understood by
-a human before it shipped. Traditional code review provides no signal about
-which hunks were generated, how quickly they were accepted, or whether they
-were ever run.
-
-barq-witness fills that gap by recording the full session provenance locally
-and surfacing the highest-risk segments at review time.
-
----
-
-## How is it different from CodeRabbit, Bugbot, or Macroscope?
-
-barq-witness uses no LLM. Every flag is computed deterministically from the
-local trace and the git diff -- fully auditable, zero false positives from
-model hallucination, and zero cost per review.
-
----
-
-## Quickstart
-
-**1. Install**
+## Quick start
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/YASSERRMD/barq-witness/main/scripts/install.sh | sh
-```
+# Install
+go install github.com/yasserrmd/barq-witness@latest
 
-Or build from source:
-
-```bash
-git clone https://github.com/YASSERRMD/barq-witness.git
-go build -o barq-witness ./cmd/barq-witness
-```
-
-**2. Initialise your repository**
-
-```bash
-cd your-repo
+# Initialize in your project
 barq-witness init
-git add .claude/settings.json
-git commit -m "chore: add barq-witness hooks"
 ```
 
-**3. Use Claude Code normally**
+Add the hooks to `.claude/settings.json`:
 
-Hooks capture prompts, edits, and executions silently in the background.
-No workflow change required.
+```json
+{
+  "hooks": {
+    "PreToolUse":  [{ "matcher": ".*", "hooks": [{ "type": "command", "command": "barq-witness record pre  --event-file $CLAUDE_HOOK_EVENT_FILE" }] }],
+    "PostToolUse": [{ "matcher": ".*", "hooks": [{ "type": "command", "command": "barq-witness record post --event-file $CLAUDE_HOOK_EVENT_FILE" }] }],
+    "Stop":        [{ "matcher": ".*", "hooks": [{ "type": "command", "command": "barq-witness record stop --event-file $CLAUDE_HOOK_EVENT_FILE" }] }]
+  }
+}
+```
 
-**4. View the attention map**
+Then generate a report:
 
 ```bash
-# After making a commit:
 barq-witness report
-
-# Compare a range:
-barq-witness report --from abc123 --to def456
-
-# Output markdown for a PR description:
-barq-witness report --format markdown --top 10
-
-# Export the full trace as CGPF JSON:
-barq-witness export --out trace.json
 ```
 
-**5. Enable GitHub PR comments (optional)**
+## What it captures
 
-Add the action to your workflow:
+- **Sessions** -- each Claude Code session is recorded as a discrete unit with start time, working directory, and exit status.
+- **Prompts** -- every user prompt and its accompanying context are captured verbatim (or hashed in privacy mode).
+- **Edits** -- every file write, patch, and delete that Claude Code performs is recorded alongside the diff and the prompt that triggered it.
+- **Executions** -- every shell command or test run Claude Code invokes is recorded with its exit code and stdout/stderr summary.
 
-```yaml
-- uses: YASSERRMD/barq-witness@main
-  with:
-    github-token: ${{ secrets.GITHUB_TOKEN }}
+## What it flags
+
+| Signal code | Description |
+|---|---|
+| `NO_EXEC` (tier 1) | Generated code was never executed locally before the session ended |
+| `FAST_ACCEPT_SECURITY` (tier 1) | A security-sensitive file path was accepted in under 5 seconds |
+| `TEST_FAIL_NO_RETEST` (tier 1) | A test failed, code was regenerated, but tests were never re-run |
+| `PROMPT_DIFF_MISMATCH` (tier 1/2) | The committed diff does not match the original prompt intent |
+| `FAST_ACCEPT_SECURITY_V2` (tier 2) | A security-sensitive file path was accepted in 5-9 seconds |
+| `COMMIT_WITHOUT_TEST` (tier 2) | A test-adjacent file was edited but no tests were run in the session |
+| `HIGH_REGEN` (tier 2) | The same file was regenerated 4 or more times within 10 minutes |
+| `NEVER_REOPENED` (tier 2) | A generated file was never accessed again after initial generation |
+| `LARGE_MULTIFILE` (tier 2) | The session touched more than 10 distinct files |
+
+For the full signal reference including tier 3 signals and plugin signals, see [docs/signals-reference.md](docs/signals-reference.md).
+
+## Supported AI coding agents
+
+- **Claude Code** -- full support (hooks-based capture)
+- **Cursor** -- read-only via `barq-witness import cursor --log <path>`
+- **Codex CLI** -- read-only via `barq-witness import codex --log <path>`
+- **Aider** -- read-only via `barq-witness import aider --chat <path>`
+- **Custom agents** -- via the plugin API and CGPF format
+
+## Privacy posture
+
+- Trace is stored locally in `.witness/trace.db`, gitignored by default.
+- No network calls in the core engine. Optional explainer and sync features are clearly labeled and opt-in.
+- Privacy mode hashes prompts and commands so even the local trace contains no source content.
+- The team aggregator (if used) only ever receives aggregate counts, never code or prompts.
+- Air-gapped deployments are supported; see [docs/air-gapped.md](docs/air-gapped.md) for the verified checklist.
+
+See also: [docs/privacy.md](docs/privacy.md) and [docs/threat-model.md](docs/threat-model.md).
+
+## LLM integration (optional)
+
+The deterministic engine is the load-bearing wall. LLMs in barq-witness only describe and explain -- they never decide what is risky. The engine runs first, LLMs annotate after. This means a network outage, a rate-limit, or a deliberate choice to run fully offline never degrades the core signal quality.
+
+Pluggable explainer backends: `null` (default, no network), `claude`, `groq`, `local` (Ollama, air-gap safe), `edge` (qwen2.5-coder:1.5b, optimized for constrained environments). One config line in `.witness/config.toml` swaps between them.
+
+See [docs/explainer.md](docs/explainer.md) for configuration details.
+
+## Architecture at a glance
+
+```
+Claude Code
+    |
+    | (hook events: PreToolUse, PostToolUse, Stop)
+    v
+barq-witness record --> .witness/trace.db (SQLite WAL)
+                               |
+                    (optional daemon.sock shortcut)
+                               |
+                    barq-witness report / tui / watch
+                               |
+                    +----------+-----------+
+                    |                      |
+               Analyzer               Explainer
+          (deterministic,           (LLM, optional,
+           always runs)              describe-only)
+                    |
+              Report / JSON / Markdown
+                    |
+          +---------+---------+
+          |                   |
+    Terminal output      GitHub Action
+     (text/TUI)        (PR comment update)
 ```
 
-See [docs/getting-started.md](docs/getting-started.md) for the full setup
-guide.
+## Components
 
----
-
-## What signals does it detect?
-
-barq-witness evaluates nine deterministic signals across three tiers:
-
-| Tier | Signal | Trigger |
+| Component | What it is | Required? |
 |---|---|---|
-| 1 | NO_EXEC | Edit never executed locally before commit |
-| 1 | FAST_ACCEPT_SECURITY | Security path accepted in under 5 seconds |
-| 1 | TEST_FAIL_NO_RETEST | Test failed, code regenerated, never re-tested |
-| 2 | HIGH_REGEN | Same file edited 4+ times in 10 minutes |
-| 2 | NEVER_REOPENED | File never accessed again after generation |
-| 2 | LARGE_MULTIFILE | Session touched more than 10 distinct files |
-| 3 | NEW_DEPENDENCY | Edit modified a dependency manifest |
-| 3 | FAST_ACCEPT_GENERIC | Any file accepted in under 3 seconds |
-| 3 | LONG_GENERATED_BLOCK | Single edit added more than 100 lines |
+| `barq-witness` | Single Go binary, the core CLI | Yes |
+| `.claude/settings.json` hooks | Capture layer for Claude Code | Yes (for Claude Code) |
+| `.witness/trace.db` | Local SQLite trace store | Yes |
+| `barq-witness daemon` | Optional long-running event receiver | No |
+| `barq-witness tui` | Live interactive dashboard | No |
+| `barq-witness mcp` | MCP server for AI assistant queries | No |
+| VS Code extension | Inline gutter markers and side panel | No |
+| `barq-witness-server` | Self-hosted team aggregator | No |
+| Plugins | Custom signal extensions via stdin/stdout | No |
 
-Full details: [docs/signals-reference.md](docs/signals-reference.md)
+## Status
 
----
+v1.1.x is stable and ready for production use. CGPF is frozen at v1.0, with no breaking changes planned. Phase numbers in commit history map directly to features; see [CHANGELOG.md](CHANGELOG.md) for the full history from phase 1 through phase 22. We are actively looking for early users in regulated industries and edge AI environments -- if that is you, open an issue or reach out directly.
 
-## Privacy
+## Roadmap
 
-Everything is local. Nothing is sent anywhere. The trace lives in
-`.witness/trace.db` (gitignored by default). The tool has no network code.
-The GitHub Action runs in your own CI, not ours.
+- Support for additional AI coding agents as they mature
+- Optional encrypted trace storage for shared developer machines
+- Browser-based session replay viewer
+- Federated team aggregator with end-to-end encrypted sync
 
-Use `barq-witness export --privacy` to redact prompt text and command strings
-before sharing a trace.
+## Author and ecosystem
 
-Full details: [docs/privacy.md](docs/privacy.md)
+Mohamed Yasser, part of the Barq ecosystem. This project is the comprehension layer for any team using AI coding tools, intentionally designed to run on the same edge infrastructure the rest of the Barq ecosystem targets.
 
----
+Related projects:
 
-## Architecture
-
-```
-Claude Code hooks --> .witness/trace.db --> barq-witness report
-                                                  |
-                                          git diff (go-git)
-                                                  |
-                                       deterministic risk scorer
-                                                  |
-                                          text / markdown output
-```
-
-Full details: [docs/how-it-works.md](docs/how-it-works.md)
-
----
-
-## Trace export (CGPF)
-
-barq-witness can export the trace as a structured JSON document conforming
-to the Code Generation Provenance Format (CGPF) v0.1:
-
-```bash
-barq-witness export --out trace.json
-barq-witness export --privacy --out trace-redacted.json
-```
-
-CGPF is an open format designed for interoperability between AI coding tools.
-Spec: [docs/cgpf-spec.md](docs/cgpf-spec.md)
-
----
+- [barq-wasm](https://github.com/yasserrmd/barq-wasm)
+- [barq-db](https://github.com/yasserrmd/barq-db)
+- [barq-mesh-web](https://github.com/yasserrmd/barq-mesh-web)
+- [BarqTrain](https://github.com/yasserrmd/BarqTrain)
+- [barflow](https://github.com/yasserrmd/barflow)
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
-
-**Author**: Mohamed Yasser ([@yasserrmd](https://github.com/YASSERRMD))
-
-Part of the Barq ecosystem: barq-wasm, barq-db, barq-mesh-web, BarqTrain,
-barflow.
+MIT. See [LICENSE](LICENSE) file.

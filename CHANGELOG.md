@@ -2,6 +2,19 @@
 
 All notable changes to barq-witness are documented here.
 
+## [1.1.0] - 2026-04-08
+
+### Added
+- Phase 17: Core documentation (docs/how-it-works.md, docs/signals-reference.md, docs/privacy.md, docs/explainer.md)
+- Phase 18: Two new risk signals -- FAST_ACCEPT_SECURITY_V2 (tier 2) and COMMIT_WITHOUT_TEST (tier 2)
+- Phase 19: Edge LLM backend for air-gapped environments (qwen2.5-coder:1.5b via Ollama), `check-airgap` subcommand, docs/air-gapped.md
+- Phase 20: Read-only import adapters for Cursor (`import cursor`), Codex CLI (`import codex`), and Aider (`import aider`)
+- Phase 21: Native MCP server (`barq-witness mcp`) exposing trace query tools to AI assistants
+- Phase 22: Comprehensive README rewrite, v1.1.0 release
+
+### Changed
+- CGPF remains frozen at v1.0 (no breaking changes)
+
 ## [1.0.0] - 2026-04-08
 
 ### Added
