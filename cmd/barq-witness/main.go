@@ -50,6 +50,8 @@ func main() {
 		runWatch(os.Args[2:])
 	case "tui":
 		runTUI(os.Args[2:])
+	case "sync":
+		runSync(os.Args[2:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
 		os.Exit(1)
