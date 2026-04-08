@@ -6,13 +6,47 @@ barq-witness hooks into Claude Code (and other AI coding tools) and writes a tam
 
 ## Quick start
 
-```bash
-# Install
-go install github.com/yasserrmd/barq-witness@latest
+### Install (no Go required)
 
-# Initialize in your project
-barq-witness init
+**macOS / Linux -- one line:**
+```sh
+curl -fsSL https://raw.githubusercontent.com/yasserrmd/barq-witness/main/install.sh | sh
 ```
+
+**Windows -- PowerShell one line:**
+```powershell
+iwr -useb https://raw.githubusercontent.com/yasserrmd/barq-witness/main/install.ps1 | iex
+```
+
+**Install a specific version:**
+```sh
+# macOS / Linux
+BARQ_VERSION=v1.1.1 curl -fsSL https://raw.githubusercontent.com/yasserrmd/barq-witness/main/install.sh | sh
+
+# Windows PowerShell
+$env:BARQ_VERSION="v1.1.1"; iwr -useb https://raw.githubusercontent.com/yasserrmd/barq-witness/main/install.ps1 | iex
+```
+
+**Install to a custom directory:**
+```sh
+# macOS / Linux (no sudo needed if the dir is yours)
+BARQ_INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/yasserrmd/barq-witness/main/install.sh | sh
+```
+
+**Install via Go (if Go is available):**
+```sh
+go install github.com/yasserrmd/barq-witness/cmd/barq-witness@latest
+```
+
+### Wire it up
+
+```sh
+cd your-project
+barq-witness init        # creates .witness/ and wires Claude Code hooks
+barq-witness report      # run after making commits
+```
+
+The `.witness/` directory is gitignored by default.
 
 Add the hooks to `.claude/settings.json`:
 
