@@ -161,6 +161,10 @@ func expandTemplate(code string, seg analyzer.Segment) string {
 		return fmt.Sprintf("Introduces a new dependency in %s", seg.FilePath)
 	case "FAST_ACCEPT_GENERIC":
 		return fmt.Sprintf("Accepted in %ds without modification", seg.AcceptedSec)
+	case "FAST_ACCEPT_SECURITY_V2":
+		return fmt.Sprintf("Accepted in %ds in a security-sensitive path (5-9s threshold)", seg.AcceptedSec)
+	case "COMMIT_WITHOUT_TEST":
+		return "Session has test file edits but no test execution was recorded"
 	case "LONG_GENERATED_BLOCK":
 		lines := 0
 		for _, line := range strings.Split(seg.PromptText, "\n") {
@@ -198,6 +202,8 @@ func writeReasonGlossary(w io.Writer, color bool, seen map[string]bool) {
 		{"HIGH_REGEN", "The same file was edited 4+ times in a 10-minute window."},
 		{"NEVER_REOPENED", "The file was never accessed by any subsequent tool after generation."},
 		{"LARGE_MULTIFILE", "The session touched more than 10 distinct files -- high cognitive load."},
+		{"FAST_ACCEPT_SECURITY_V2", "Security-sensitive path accepted in 5-9 seconds (relaxed threshold)."},
+		{"COMMIT_WITHOUT_TEST", "Session has test file edits but no test execution was recorded."},
 		{"NEW_DEPENDENCY", "The edit modified a dependency manifest (package.json, go.mod, etc)."},
 		{"FAST_ACCEPT_GENERIC", "Edit was accepted in under 3 seconds."},
 		{"LONG_GENERATED_BLOCK", "A single tool call added more than 100 lines."},

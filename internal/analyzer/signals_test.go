@@ -492,6 +492,225 @@ func TestSignal_NewDependency_FiresViaAnalyze(t *testing.T) {
 	}
 }
 
+// --- FAST_ACCEPT_SECURITY_V2 fires (5-9 seconds) ----------------------------
+
+func TestFastAcceptSecurityV2_Fires(t *testing.T) {
+	s := openFreshStore(t)
+	repoPath, parentSHA, headSHA := initGitRepoWithFiles(t, "internal/auth/handler.go")
+
+	sessID := "sess-fastsec-v2-fires"
+	if err := s.InsertSession(model.Session{ID: sessID, StartedAt: ms(10 * time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UnixMilli()
+	// Prompt 7 seconds before edit -- should fire V2, not V1.
+	pID, _ := s.InsertPrompt(model.Prompt{
+		SessionID: sessID, Timestamp: now - 7000,
+		Content: "add auth check", ContentHash: "h",
+	})
+	if err := s.InsertEdit(model.Edit{
+		SessionID: sessID, PromptID: &pID,
+		Timestamp: now, FilePath: "internal/auth/handler.go", Tool: "Write",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Add an execution so NO_EXEC does not fire (which would elevate tier to 1).
+	exitCode := 0
+	if err := s.InsertExecution(model.Execution{
+		SessionID: sessID, Timestamp: now + 1000,
+		Command: "go build ./...", Classification: "build",
+		FilesTouched: `["internal/auth/handler.go"]`, ExitCode: &exitCode,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := analyzer.Analyze(s, repoPath, parentSHA, headSHA)
+	if err != nil {
+		t.Fatalf("Analyze: %v", err)
+	}
+	seg, ok := firstSegmentForFile(report, "internal/auth/handler.go")
+	if !ok {
+		t.Fatal("expected segment for auth/handler.go")
+	}
+	if !hasReason(seg, "FAST_ACCEPT_SECURITY_V2") {
+		t.Errorf("expected FAST_ACCEPT_SECURITY_V2, got %v", seg.ReasonCodes)
+	}
+	if hasReason(seg, "FAST_ACCEPT_SECURITY") {
+		t.Errorf("FAST_ACCEPT_SECURITY should not fire when accepted in 7s, got %v", seg.ReasonCodes)
+	}
+	if seg.Tier != 2 {
+		t.Errorf("expected tier 2, got %d", seg.Tier)
+	}
+}
+
+// --- FAST_ACCEPT_SECURITY_V2 does not fire when < 5s (FAST_ACCEPT_SECURITY fires instead) ---
+
+func TestFastAcceptSecurityV2_NoFireBelowFive(t *testing.T) {
+	s := openFreshStore(t)
+	repoPath, parentSHA, headSHA := initGitRepoWithFiles(t, "internal/auth/handler.go")
+
+	sessID := "sess-fastsec-v2-below5"
+	if err := s.InsertSession(model.Session{ID: sessID, StartedAt: ms(10 * time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UnixMilli()
+	// Prompt 3 seconds before edit -- FAST_ACCEPT_SECURITY fires, V2 must not.
+	pID, _ := s.InsertPrompt(model.Prompt{
+		SessionID: sessID, Timestamp: now - 3000,
+		Content: "add auth check", ContentHash: "h",
+	})
+	if err := s.InsertEdit(model.Edit{
+		SessionID: sessID, PromptID: &pID,
+		Timestamp: now, FilePath: "internal/auth/handler.go", Tool: "Write",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := analyzer.Analyze(s, repoPath, parentSHA, headSHA)
+	if err != nil {
+		t.Fatalf("Analyze: %v", err)
+	}
+	seg, ok := firstSegmentForFile(report, "internal/auth/handler.go")
+	if !ok {
+		t.Fatal("expected segment for auth/handler.go")
+	}
+	if !hasReason(seg, "FAST_ACCEPT_SECURITY") {
+		t.Errorf("expected FAST_ACCEPT_SECURITY to fire for 3s accept, got %v", seg.ReasonCodes)
+	}
+	if hasReason(seg, "FAST_ACCEPT_SECURITY_V2") {
+		t.Errorf("FAST_ACCEPT_SECURITY_V2 must not fire when FAST_ACCEPT_SECURITY already fired, got %v", seg.ReasonCodes)
+	}
+}
+
+// --- FAST_ACCEPT_SECURITY_V2 does not fire when >= 10s ----------------------
+
+func TestFastAcceptSecurityV2_NoFireAboveTen(t *testing.T) {
+	s := openFreshStore(t)
+	repoPath, parentSHA, headSHA := initGitRepoWithFiles(t, "internal/auth/handler.go")
+
+	sessID := "sess-fastsec-v2-above10"
+	if err := s.InsertSession(model.Session{ID: sessID, StartedAt: ms(10 * time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UnixMilli()
+	// Prompt 12 seconds before edit -- neither signal should fire.
+	pID, _ := s.InsertPrompt(model.Prompt{
+		SessionID: sessID, Timestamp: now - 12000,
+		Content: "add auth check", ContentHash: "h",
+	})
+	if err := s.InsertEdit(model.Edit{
+		SessionID: sessID, PromptID: &pID,
+		Timestamp: now, FilePath: "internal/auth/handler.go", Tool: "Write",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := analyzer.Analyze(s, repoPath, parentSHA, headSHA)
+	if err != nil {
+		t.Fatalf("Analyze: %v", err)
+	}
+	seg, ok := firstSegmentForFile(report, "internal/auth/handler.go")
+	if !ok {
+		// Zero-score segments are excluded from the report -- that is fine.
+		return
+	}
+	if hasReason(seg, "FAST_ACCEPT_SECURITY") {
+		t.Errorf("FAST_ACCEPT_SECURITY must not fire for 12s accept, got %v", seg.ReasonCodes)
+	}
+	if hasReason(seg, "FAST_ACCEPT_SECURITY_V2") {
+		t.Errorf("FAST_ACCEPT_SECURITY_V2 must not fire for 12s accept, got %v", seg.ReasonCodes)
+	}
+}
+
+// --- COMMIT_WITHOUT_TEST fires -----------------------------------------------
+
+func TestCommitWithoutTest_Fires(t *testing.T) {
+	s := openFreshStore(t)
+	repoPath, parentSHA, headSHA := initGitRepoWithFiles(t, "main.go", "main_test.go")
+
+	sessID := "sess-commit-no-test-fires"
+	if err := s.InsertSession(model.Session{ID: sessID, StartedAt: ms(30 * time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	base := ms(20 * time.Minute)
+
+	// Edit to the production file.
+	if err := s.InsertEdit(model.Edit{
+		SessionID: sessID, Timestamp: base,
+		FilePath: "main.go", Tool: "Write",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Edit to the test file (establishes sessionHasTestEdits).
+	if err := s.InsertEdit(model.Edit{
+		SessionID: sessID, Timestamp: base + 1000,
+		FilePath: "main_test.go", Tool: "Write",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// No test execution inserted.
+
+	report, err := analyzer.Analyze(s, repoPath, parentSHA, headSHA)
+	if err != nil {
+		t.Fatalf("Analyze: %v", err)
+	}
+	seg, ok := firstSegmentForFile(report, "main.go")
+	if !ok {
+		t.Fatal("expected segment for main.go")
+	}
+	if !hasReason(seg, "COMMIT_WITHOUT_TEST") {
+		t.Errorf("expected COMMIT_WITHOUT_TEST, got %v", seg.ReasonCodes)
+	}
+}
+
+// --- COMMIT_WITHOUT_TEST does not fire when tests ran -----------------------
+
+func TestCommitWithoutTest_NoFireWhenTestsRan(t *testing.T) {
+	s := openFreshStore(t)
+	repoPath, parentSHA, headSHA := initGitRepoWithFiles(t, "main.go", "main_test.go")
+
+	sessID := "sess-commit-no-test-quiet"
+	if err := s.InsertSession(model.Session{ID: sessID, StartedAt: ms(30 * time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	base := ms(20 * time.Minute)
+
+	// Edit to the production file.
+	if err := s.InsertEdit(model.Edit{
+		SessionID: sessID, Timestamp: base,
+		FilePath: "main.go", Tool: "Write",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Edit to the test file (establishes sessionHasTestEdits).
+	if err := s.InsertEdit(model.Edit{
+		SessionID: sessID, Timestamp: base + 1000,
+		FilePath: "main_test.go", Tool: "Write",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Test execution IS present -- signal must not fire.
+	exitCode := 0
+	if err := s.InsertExecution(model.Execution{
+		SessionID: sessID, Timestamp: base + 2000,
+		Command: "go test ./...", Classification: "test",
+		ExitCode: &exitCode,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := analyzer.Analyze(s, repoPath, parentSHA, headSHA)
+	if err != nil {
+		t.Fatalf("Analyze: %v", err)
+	}
+	// Check any segment for main.go -- signal must not fire.
+	for _, seg := range report.Segments {
+		if seg.FilePath == "main.go" && hasReason(seg, "COMMIT_WITHOUT_TEST") {
+			t.Errorf("COMMIT_WITHOUT_TEST must not fire when test execution exists, got %v", seg.ReasonCodes)
+		}
+	}
+}
+
 // --- Multi-segment ranking end-to-end ---------------------------------------
 
 // TestAnalyze_MultiSegmentRanking verifies that the segment with higher score

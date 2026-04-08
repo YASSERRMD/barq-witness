@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	gitdiff "github.com/yasserrmd/barq-witness/internal/diff"
@@ -126,6 +127,8 @@ func AnalyzeWithOptions(st *store.Store, repoPath, fromSHA, toSHA string, opts A
 		return nil, err
 	}
 	sessionFileCount := buildSessionFileCount(sessionEdits)
+	sessionTestEdits := buildSessionTestEditFlag(sessionEdits)
+	sessionTestExecs := buildSessionTestExecFlag(sessionExecs)
 
 	// 4. Build a lookup from file path -> changed line ranges (from git diff).
 	changedLines := buildChangedLineMap(changes)
@@ -190,12 +193,14 @@ func AnalyzeWithOptions(st *store.Store, repoPath, fromSHA, toSHA string, opts A
 		}
 
 		sigCtx := signalContext{
-			edit:          edit,
-			promptTS:      promptTS,
-			promptText:    seg.PromptText,
-			execsInSess:   execs,
-			editsInSess:   sessionEdits[edit.SessionID],
-			distinctFiles: sessionFileCount[edit.SessionID],
+			edit:                edit,
+			promptTS:            promptTS,
+			promptText:          seg.PromptText,
+			execsInSess:         execs,
+			editsInSess:         sessionEdits[edit.SessionID],
+			distinctFiles:       sessionFileCount[edit.SessionID],
+			sessionHasTestEdits: sessionTestEdits[edit.SessionID],
+			sessionHasTestExecs: sessionTestExecs[edit.SessionID],
 		}
 
 		computeSignals(sigCtx, &seg)
@@ -377,5 +382,35 @@ func derefInt(p *int, def int) int {
 		return def
 	}
 	return *p
+}
+
+// buildSessionTestEditFlag returns a map from session ID to whether the session
+// contains at least one edit to a *_test.go file.
+func buildSessionTestEditFlag(sessionEdits map[string][]model.Edit) map[string]bool {
+	result := make(map[string]bool)
+	for sessID, edits := range sessionEdits {
+		for _, e := range edits {
+			if strings.HasSuffix(e.FilePath, "_test.go") {
+				result[sessID] = true
+				break
+			}
+		}
+	}
+	return result
+}
+
+// buildSessionTestExecFlag returns a map from session ID to whether the session
+// contains at least one execution with classification="test".
+func buildSessionTestExecFlag(sessionExecs map[string][]model.Execution) map[string]bool {
+	result := make(map[string]bool)
+	for sessID, execs := range sessionExecs {
+		for _, x := range execs {
+			if x.Classification == "test" {
+				result[sessID] = true
+				break
+			}
+		}
+	}
+	return result
 }
 
