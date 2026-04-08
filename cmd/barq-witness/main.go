@@ -46,6 +46,10 @@ func main() {
 		runExport(os.Args[2:])
 	case "daemon":
 		runDaemon(os.Args[2:])
+	case "watch":
+		runWatch(os.Args[2:])
+	case "tui":
+		runTUI(os.Args[2:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
 		os.Exit(1)
