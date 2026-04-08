@@ -16,7 +16,7 @@ import (
 )
 
 // Version is the CGPF spec version this package implements.
-const Version = "0.1"
+const Version = "0.2"
 
 // BinaryVersion is set by the main package at build time.
 var BinaryVersion = "vDEV"
@@ -46,16 +46,26 @@ type CommitRange struct {
 
 // Session is the per-session export structure.
 type Session struct {
-	ID           string      `json:"id"`
-	StartedAt    string      `json:"started_at"`
-	EndedAt      *string     `json:"ended_at"`
-	Model        string      `json:"model"`
-	CWD          string      `json:"cwd"`
-	GitHeadStart string      `json:"git_head_start"`
-	GitHeadEnd   *string     `json:"git_head_end"`
-	Prompts      []Prompt    `json:"prompts"`
-	Edits        []Edit      `json:"edits"`
-	Executions   []Execution `json:"executions"`
+	ID             string               `json:"id"`
+	StartedAt      string               `json:"started_at"`
+	EndedAt        *string              `json:"ended_at"`
+	Model          string               `json:"model"`
+	CWD            string               `json:"cwd"`
+	GitHeadStart   string               `json:"git_head_start"`
+	GitHeadEnd     *string              `json:"git_head_end"`
+	Prompts        []Prompt             `json:"prompts"`
+	Edits          []Edit               `json:"edits"`
+	Executions     []Execution          `json:"executions"`
+	IntentMatches  []IntentMatchRecord  `json:"intent_matches,omitempty"`
+}
+
+// IntentMatchRecord is the CGPF intent match record per edit.
+type IntentMatchRecord struct {
+	EditID     int64   `json:"edit_id"`
+	Score      float64 `json:"score"`
+	Reasoning  *string `json:"reasoning,omitempty"` // omitted in privacy mode
+	Model      string  `json:"model"`
+	ComputedAt string  `json:"computed_at"`
 }
 
 // Prompt is the CGPF prompt record.
@@ -234,6 +244,24 @@ func exportSession(st *store.Store, sess model.Session, opts ExportOptions) (Ses
 			ex.Command = &x.Command
 		}
 		out.Executions = append(out.Executions, ex)
+	}
+
+	// Intent matches -- one per edit that has a stored match.
+	for _, e := range edits {
+		im, ok, err := st.IntentMatchForEdit(e.ID)
+		if err != nil || !ok {
+			continue
+		}
+		rec := IntentMatchRecord{
+			EditID:     im.EditID,
+			Score:      im.Score,
+			Model:      im.Model,
+			ComputedAt: msToISO(im.ComputedAt),
+		}
+		if !opts.Privacy {
+			rec.Reasoning = &im.Reasoning
+		}
+		out.IntentMatches = append(out.IntentMatches, rec)
 	}
 
 	return out, nil

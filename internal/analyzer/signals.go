@@ -25,6 +25,7 @@ const (
 	ReasonNewDependency       = "NEW_DEPENDENCY"
 	ReasonFastAcceptGeneric   = "FAST_ACCEPT_GENERIC"
 	ReasonLongGeneratedBlock  = "LONG_GENERATED_BLOCK"
+	ReasonPromptDiffMismatch  = "PROMPT_DIFF_MISMATCH"
 )
 
 // signalContext bundles all trace data needed to evaluate signals for one
@@ -256,7 +257,7 @@ func computeTier(reasons []string) int {
 		return 0
 	}
 	tier1 := map[string]bool{ReasonNoExec: true, ReasonFastAcceptSecurity: true, ReasonTestFailNoRetest: true}
-	tier2 := map[string]bool{ReasonHighRegen: true, ReasonNeverReopened: true, ReasonLargeMultifile: true}
+	tier2 := map[string]bool{ReasonHighRegen: true, ReasonNeverReopened: true, ReasonLargeMultifile: true, ReasonPromptDiffMismatch: true}
 
 	best := 3
 	for _, r := range reasons {
