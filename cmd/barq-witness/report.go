@@ -124,15 +124,26 @@ func runReport(args []string) {
 	}
 	defer s.Close()
 
+	// Build the explainer (always constructed; may be the null backend).
+	exp := explainer.New(cfg, witnessDir)
+	defer exp.Close()
+
+	// Wire the optional intent matcher: a thin adapter around the explainer's
+	// IntentMatch method.  Only active when EnableIntentMatching is true.
+	analyzeOpts := analyzer.AnalyzeOptions{
+		Threshold: cfg.Analyzer.IntentMatchThreshold,
+	}
+	if cfg.Analyzer.EnableIntentMatching && exp.Name() != "null" {
+		analyzeOpts.Matcher = &explainerIntentAdapter{exp: exp}
+	}
+
 	// Run the analyzer.
-	report, err := analyzer.Analyze(s, cwd, resolvedFrom, resolvedTo)
+	report, err := analyzer.AnalyzeWithOptions(s, cwd, resolvedFrom, resolvedTo, analyzeOpts)
 	if err != nil {
 		fatalf("analyze: %v", err)
 	}
 
 	// Run the explainer over the segments (always completes even on error).
-	exp := explainer.New(cfg, witnessDir)
-	defer exp.Close()
 	explainer.EnrichSegments(context.Background(), exp, report.Segments)
 
 	// Choose format.
@@ -183,4 +194,19 @@ func validateRange(from, to string) error {
 		return fmt.Errorf("could not determine target commit (use --commit or --to)")
 	}
 	return nil
+}
+
+// explainerIntentAdapter wraps an explainer.Explainer to satisfy the
+// analyzer.IntentMatcher interface.  It delegates to IntentMatch and translates
+// the result so the analyzer stays free of any explainer dependency.
+type explainerIntentAdapter struct {
+	exp explainer.Explainer
+}
+
+func (a *explainerIntentAdapter) Match(ctx context.Context, prompt string, diff string) (float64, string, error) {
+	result, err := a.exp.IntentMatch(ctx, prompt, diff)
+	if err != nil {
+		return 0, "", err
+	}
+	return result.Score, result.Reasoning, nil
 }

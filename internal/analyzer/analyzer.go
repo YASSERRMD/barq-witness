@@ -4,6 +4,7 @@
 package analyzer
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"time"
@@ -12,6 +13,15 @@ import (
 	"github.com/yasserrmd/barq-witness/internal/model"
 	"github.com/yasserrmd/barq-witness/internal/store"
 )
+
+// AnalyzeOptions controls optional behaviour for AnalyzeWithOptions.
+type AnalyzeOptions struct {
+	// Matcher is the optional intent-matching backend. nil disables the signal.
+	Matcher IntentMatcher
+	// Threshold is the score below which PROMPT_DIFF_MISMATCH fires.
+	// A zero value defaults to 0.5.
+	Threshold float64
+}
 
 // Segment represents one reviewed unit: a contiguous set of lines in a file
 // that was written by Claude Code during a traced session.
@@ -53,7 +63,20 @@ type Report struct {
 // Analyze computes a risk report for the diff between fromSHA and toSHA in
 // the git repository at repoPath, cross-referenced against the trace store.
 // If fromSHA is empty, toSHA is compared against its first parent.
+// Intent matching is disabled (nil matcher).
 func Analyze(st *store.Store, repoPath, fromSHA, toSHA string) (*Report, error) {
+	return AnalyzeWithOptions(st, repoPath, fromSHA, toSHA, AnalyzeOptions{})
+}
+
+// AnalyzeWithOptions is like Analyze but accepts optional analysis behaviour.
+// When opts.Matcher is non-nil and a segment has prompt text and diff data,
+// the matcher is called and PROMPT_DIFF_MISMATCH is added if score < threshold.
+func AnalyzeWithOptions(st *store.Store, repoPath, fromSHA, toSHA string, opts AnalyzeOptions) (*Report, error) {
+	threshold := opts.Threshold
+	if threshold == 0 {
+		threshold = 0.5
+	}
+
 	// 1. Get changed files from git diff.
 	changes, err := gitdiff.ChangedFiles(repoPath, fromSHA, toSHA)
 	if err != nil {
@@ -154,7 +177,7 @@ func Analyze(st *store.Store, repoPath, fromSHA, toSHA string) (*Report, error) 
 			}
 		}
 
-		ctx := signalContext{
+		sigCtx := signalContext{
 			edit:          edit,
 			promptTS:      promptTS,
 			promptText:    seg.PromptText,
@@ -163,7 +186,19 @@ func Analyze(st *store.Store, repoPath, fromSHA, toSHA string) (*Report, error) 
 			distinctFiles: sessionFileCount[edit.SessionID],
 		}
 
-		computeSignals(ctx, &seg)
+		computeSignals(sigCtx, &seg)
+
+		// --- Optional Tier 2: PROMPT_DIFF_MISMATCH --------------------------
+		// Only runs when a matcher is provided and the segment has prompt + diff.
+		if opts.Matcher != nil && seg.PromptText != "" && edit.Diff != "" {
+			score, _, matchErr := opts.Matcher.Match(context.Background(), seg.PromptText, edit.Diff)
+			if matchErr == nil && score < threshold {
+				seg.ReasonCodes = append(seg.ReasonCodes, ReasonPromptDiffMismatch)
+				seg.Score += WeightTier2
+				// Re-compute tier to account for the new reason code.
+				seg.Tier = computeTier(seg.ReasonCodes)
+			}
+		}
 
 		if seg.Score == 0 {
 			continue // exclude zero-score segments
