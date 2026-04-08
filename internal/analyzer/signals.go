@@ -16,27 +16,31 @@ const (
 
 // Reason codes (machine-readable, stable identifiers).
 const (
-	ReasonNoExec              = "NO_EXEC"
-	ReasonFastAcceptSecurity  = "FAST_ACCEPT_SECURITY"
-	ReasonTestFailNoRetest    = "TEST_FAIL_NO_RETEST"
-	ReasonHighRegen           = "HIGH_REGEN"
-	ReasonNeverReopened       = "NEVER_REOPENED"
-	ReasonLargeMultifile      = "LARGE_MULTIFILE"
-	ReasonNewDependency       = "NEW_DEPENDENCY"
-	ReasonFastAcceptGeneric   = "FAST_ACCEPT_GENERIC"
-	ReasonLongGeneratedBlock  = "LONG_GENERATED_BLOCK"
-	ReasonPromptDiffMismatch  = "PROMPT_DIFF_MISMATCH"
+	ReasonNoExec                 = "NO_EXEC"
+	ReasonFastAcceptSecurity     = "FAST_ACCEPT_SECURITY"
+	ReasonTestFailNoRetest       = "TEST_FAIL_NO_RETEST"
+	ReasonHighRegen              = "HIGH_REGEN"
+	ReasonNeverReopened          = "NEVER_REOPENED"
+	ReasonLargeMultifile         = "LARGE_MULTIFILE"
+	ReasonNewDependency          = "NEW_DEPENDENCY"
+	ReasonFastAcceptGeneric      = "FAST_ACCEPT_GENERIC"
+	ReasonLongGeneratedBlock     = "LONG_GENERATED_BLOCK"
+	ReasonPromptDiffMismatch     = "PROMPT_DIFF_MISMATCH"
+	ReasonFastAcceptSecurityV2   = "FAST_ACCEPT_SECURITY_V2"
+	ReasonCommitWithoutTest      = "COMMIT_WITHOUT_TEST"
 )
 
 // signalContext bundles all trace data needed to evaluate signals for one
 // segment.  It is precomputed once per session to avoid repeated DB queries.
 type signalContext struct {
-	edit         model.Edit
-	promptTS     int64  // unix-ms of the linked prompt (0 if none)
-	promptText   string
-	execsInSess  []model.Execution // all executions in the session, sorted by timestamp
-	editsInSess  []model.Edit      // all edits in the session, sorted by timestamp
-	distinctFiles int              // distinct files touched in this session
+	edit              model.Edit
+	promptTS          int64  // unix-ms of the linked prompt (0 if none)
+	promptText        string
+	execsInSess       []model.Execution // all executions in the session, sorted by timestamp
+	editsInSess       []model.Edit      // all edits in the session, sorted by timestamp
+	distinctFiles     int               // distinct files touched in this session
+	sessionHasTestEdits bool            // session contains at least one edit to a *_test.go file
+	sessionHasTestExecs bool            // session contains at least one execution with classification="test"
 }
 
 // computeSignals runs all signal checks against ctx and populates seg.
@@ -65,6 +69,17 @@ func computeSignals(ctx signalContext, seg *Segment) {
 	}
 
 	// --- TIER 2 ---------------------------------------------------------
+
+	fastAcceptSecurityFired := containsReason(reasons, ReasonFastAcceptSecurity)
+	if acceptedSec >= 5 && acceptedSec < 10 && seg.SecurityHit && !fastAcceptSecurityFired {
+		reasons = append(reasons, ReasonFastAcceptSecurityV2)
+		score += WeightTier2
+	}
+
+	if checkCommitWithoutTest(ctx) {
+		reasons = append(reasons, ReasonCommitWithoutTest)
+		score += WeightTier2
+	}
 
 	if checkHighRegen(ctx) {
 		reasons = append(reasons, ReasonHighRegen)
@@ -197,6 +212,20 @@ func checkTestFailNoRetest(ctx signalContext) bool {
 	return false
 }
 
+// checkCommitWithoutTest returns true when:
+//  1. The session has at least one edit to a *_test.go file.
+//  2. The session has zero executions with classification="test".
+//  3. The current segment's file is NOT a test file (no _test.go suffix).
+func checkCommitWithoutTest(ctx signalContext) bool {
+	if !ctx.sessionHasTestEdits {
+		return false
+	}
+	if ctx.sessionHasTestExecs {
+		return false
+	}
+	return !strings.HasSuffix(ctx.edit.FilePath, "_test.go")
+}
+
 // checkLongGeneratedBlock returns true if the edit's diff adds > 100 lines.
 func checkLongGeneratedBlock(ctx signalContext) bool {
 	diff := ctx.edit.Diff
@@ -257,7 +286,7 @@ func computeTier(reasons []string) int {
 		return 0
 	}
 	tier1 := map[string]bool{ReasonNoExec: true, ReasonFastAcceptSecurity: true, ReasonTestFailNoRetest: true}
-	tier2 := map[string]bool{ReasonHighRegen: true, ReasonNeverReopened: true, ReasonLargeMultifile: true, ReasonPromptDiffMismatch: true}
+	tier2 := map[string]bool{ReasonHighRegen: true, ReasonNeverReopened: true, ReasonLargeMultifile: true, ReasonPromptDiffMismatch: true, ReasonFastAcceptSecurityV2: true, ReasonCommitWithoutTest: true}
 
 	best := 3
 	for _, r := range reasons {

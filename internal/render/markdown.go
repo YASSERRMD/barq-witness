@@ -108,6 +108,8 @@ func Markdown(w io.Writer, report *analyzer.Report, opts MarkdownOptions) error 
 		{"HIGH_REGEN", "2", "Same file edited 4+ times in a 10-minute window."},
 		{"NEVER_REOPENED", "2", "File never accessed by any subsequent tool after generation."},
 		{"LARGE_MULTIFILE", "2", "Session touched more than 10 distinct files."},
+		{"FAST_ACCEPT_SECURITY_V2", "2", "Security-sensitive path accepted in 5-9 seconds (relaxed threshold)."},
+		{"COMMIT_WITHOUT_TEST", "2", "Session has test file edits but no test execution was recorded."},
 		{"NEW_DEPENDENCY", "3", "Edit modified a dependency manifest."},
 		{"FAST_ACCEPT_GENERIC", "3", "Edit accepted in under 3 seconds."},
 		{"LONG_GENERATED_BLOCK", "3", "Single tool call added more than 100 lines."},
