@@ -21,6 +21,10 @@ import (
 	"github.com/yasserrmd/barq-witness/internal/daemon"
 )
 
+// detachProcess is implemented in daemon_unix.go (!windows) and daemon_windows.go.
+// On Unix it sets Setsid so the child outlives the parent process group.
+// On Windows it is a no-op.
+
 // runDaemonForeground is called when the binary detects --daemon-foreground.
 // It starts the daemon server and blocks until the process receives a signal.
 func runDaemonForeground(witnessDir string) {
@@ -91,7 +95,7 @@ func daemonStart(witnessDir, socketPath, pidPath string) {
 	cmd.Stderr = nil
 	cmd.Stdin = nil
 	// Detach from the parent process group so the child outlives us.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	detachProcess(cmd)
 
 	if err := cmd.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "daemon start: exec: %v\n", err)
