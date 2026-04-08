@@ -38,38 +38,38 @@ type AnalyzeOptions struct {
 // Segment represents one reviewed unit: a contiguous set of lines in a file
 // that was written by Claude Code during a traced session.
 type Segment struct {
-	FilePath    string
-	LineStart   int
-	LineEnd     int
-	EditID      int64
-	SessionID   string
-	PromptID    *int64
-	PromptText  string // resolved from prompts table
-	GeneratedAt int64  // unix ms
-	AcceptedSec int    // seconds from prompt to edit (-1 if unknown)
-	Modified    bool   // after_hash != current on-disk file hash
-	Executed    bool   // any execution touched this file after the edit
-	Reopened    bool   // any subsequent tool call touched this file
-	RegenCount  int    // number of edits to same file within session
-	SecurityHit bool   // file matches a security-sensitive glob
-	NewDep      bool   // file is a dependency manifest
-	Tier        int    // 1, 2, or 3 (0 = unscored)
-	ReasonCodes []string
-	Score       float64
+	FilePath    string   `json:"file_path"`
+	LineStart   int      `json:"line_start"`
+	LineEnd     int      `json:"line_end"`
+	EditID      int64    `json:"edit_id"`
+	SessionID   string   `json:"session_id"`
+	PromptID    *int64   `json:"prompt_id,omitempty"`
+	PromptText  string   `json:"prompt_text,omitempty"` // resolved from prompts table
+	GeneratedAt int64    `json:"generated_at"`          // unix ms
+	AcceptedSec int      `json:"accepted_sec"`          // seconds from prompt to edit (-1 if unknown)
+	Modified    bool     `json:"modified"`              // after_hash != current on-disk file hash
+	Executed    bool     `json:"executed"`              // any execution touched this file after the edit
+	Reopened    bool     `json:"reopened"`              // any subsequent tool call touched this file
+	RegenCount  int      `json:"regen_count"`           // number of edits to same file within session
+	SecurityHit bool     `json:"security_hit"`          // file matches a security-sensitive glob
+	NewDep      bool     `json:"new_dep"`               // file is a dependency manifest
+	Tier        int      `json:"tier"`                  // 1, 2, or 3 (0 = unscored)
+	ReasonCodes []string `json:"reason_codes"`
+	Score       float64  `json:"score"`
 	// Explanation is populated by the optional explainer layer after analysis.
 	// It is never set by the analyzer itself and never affects Tier or Score.
-	Explanation string
+	Explanation string `json:"explanation,omitempty"`
 }
 
 // Report is the analysis output for a commit range.
 type Report struct {
-	CommitRange   string
-	GeneratedAt   int64
-	TotalSegments int
-	Tier1Count    int
-	Tier2Count    int
-	Tier3Count    int
-	Segments      []Segment // ranked by Score descending, ties broken by FilePath
+	CommitRange   string    `json:"commit_range"`
+	GeneratedAt   int64     `json:"generated_at"`
+	TotalSegments int       `json:"total_segments"`
+	Tier1Count    int       `json:"tier1_count"`
+	Tier2Count    int       `json:"tier2_count"`
+	Tier3Count    int       `json:"tier3_count"`
+	Segments      []Segment `json:"segments"` // ranked by Score descending, ties broken by FilePath
 }
 
 // Analyze computes a risk report for the diff between fromSHA and toSHA in

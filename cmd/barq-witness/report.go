@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -190,8 +191,18 @@ func runReport(args []string) {
 		}); err != nil {
 			fatalf("render markdown: %v", err)
 		}
+	case "json":
+		// Truncate segments to topN before marshalling.
+		if topN > 0 && len(report.Segments) > topN {
+			report.Segments = report.Segments[:topN]
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(report); err != nil {
+			fatalf("render json: %v", err)
+		}
 	default:
-		fatalf("unknown format %q (use text or markdown)", format)
+		fatalf("unknown format %q (use text, markdown, or json)", format)
 	}
 }
 
