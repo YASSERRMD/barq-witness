@@ -54,6 +54,8 @@ func main() {
 		runSync(os.Args[2:])
 	case "check-airgap":
 		runCheckAirgap(os.Args[2:])
+	case "import":
+		runImport(os.Args[2:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
 		os.Exit(1)
