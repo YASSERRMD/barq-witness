@@ -3,6 +3,7 @@ module github.com/yasserrmd/barq-witness
 go 1.24.0
 
 require (
+	github.com/BurntSushi/toml v1.6.0
 	github.com/go-git/go-git/v5 v5.17.2
 	github.com/sergi/go-diff v1.4.0
 	modernc.org/sqlite v1.34.5

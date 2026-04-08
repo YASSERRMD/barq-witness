@@ -83,6 +83,11 @@ func Text(w io.Writer, report *analyzer.Report, opts TextOptions) error {
 			fmt.Fprintf(w, "  prompt  : %q\n", truncated)
 		}
 
+		// Explanation (from explainer layer; falls back to deterministic template).
+		if seg.Explanation != "" {
+			fmt.Fprintf(w, "  explain : %s\n", seg.Explanation)
+		}
+
 		// Timing facts.
 		genTime := msToTime(seg.GeneratedAt)
 		acceptStr := "unknown"
