@@ -28,6 +28,8 @@ func main() {
 		runInit(os.Args[2:])
 	case "report":
 		runReport(os.Args[2:])
+	case "export":
+		runExport(os.Args[2:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
 		os.Exit(1)
