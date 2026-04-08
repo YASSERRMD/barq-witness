@@ -1,7 +1,8 @@
 #!/usr/bin/env sh
 # barq-witness installer for macOS and Linux
 # Usage: curl -fsSL https://raw.githubusercontent.com/yasserrmd/barq-witness/main/install.sh | sh
-# Or with a specific version: BARQ_VERSION=v1.1.1 curl -fsSL ... | sh
+# Or with a specific version: curl -fsSL ... | BARQ_VERSION=v1.1.1 sh
+# Or to a custom dir:        curl -fsSL ... | BARQ_INSTALL_DIR=~/.local/bin sh
 
 set -e
 

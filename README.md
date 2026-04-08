@@ -21,16 +21,16 @@ iwr -useb https://raw.githubusercontent.com/yasserrmd/barq-witness/main/install.
 **Install a specific version:**
 ```sh
 # macOS / Linux
-BARQ_VERSION=v1.1.1 curl -fsSL https://raw.githubusercontent.com/yasserrmd/barq-witness/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/yasserrmd/barq-witness/main/install.sh | BARQ_VERSION=v1.1.1 sh
 
 # Windows PowerShell
 $env:BARQ_VERSION="v1.1.1"; iwr -useb https://raw.githubusercontent.com/yasserrmd/barq-witness/main/install.ps1 | iex
 ```
 
-**Install to a custom directory:**
+**Install to a custom directory (no sudo needed):**
 ```sh
-# macOS / Linux (no sudo needed if the dir is yours)
-BARQ_INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/yasserrmd/barq-witness/main/install.sh | sh
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/yasserrmd/barq-witness/main/install.sh | BARQ_INSTALL_DIR=~/.local/bin sh
 ```
 
 **Install via Go (if Go is available):**
