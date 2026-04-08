@@ -1,0 +1,47 @@
+{
+  "name": "barq-witness",
+  "displayName": "barq-witness",
+  "description": "AI code provenance and attention map for barq-witness",
+  "version": "0.1.0",
+  "publisher": "yasserrmd",
+  "engines": {"vscode": "^1.85.0"},
+  "categories": ["Other"],
+  "activationEvents": ["workspaceContains:.witness/trace.db"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {"command": "barq-witness.refresh", "title": "barq-witness: Refresh Attention Map"},
+      {"command": "barq-witness.showPanel", "title": "barq-witness: Show Attention Map Panel"},
+      {"command": "barq-witness.clearDecorations", "title": "barq-witness: Clear Decorations"}
+    ],
+    "configuration": {
+      "title": "barq-witness",
+      "properties": {
+        "barq-witness.binaryPath": {
+          "type": "string",
+          "default": "barq-witness",
+          "description": "Path to the barq-witness binary"
+        },
+        "barq-witness.topN": {
+          "type": "number",
+          "default": 10,
+          "description": "Maximum number of segments to show"
+        },
+        "barq-witness.autoRefreshSeconds": {
+          "type": "number",
+          "default": 0,
+          "description": "Auto-refresh interval in seconds (0 = disabled)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  }
+}
