@@ -1,0 +1,16 @@
+# barq-witness local trace directory
+.witness/
+
+# SQLite databases
+*.db
+*.db-shm
+*.db-wal
+
+# Go build artifacts
+/barq-witness
+/build/
+dist/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
