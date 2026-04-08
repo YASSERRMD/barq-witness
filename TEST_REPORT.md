@@ -166,3 +166,39 @@ barq-witness documents 22 development phases. Cross-referencing test files again
 ## Coverage output note
 
 `coverage.out` is stored at the repository root. It is excluded from version control via .gitignore.
+
+---
+
+## Phase B -- Resolution log
+
+**Performed: 2026-04-08**
+
+### Scope
+
+Phase B goal was to get the test suite to a clean green state by fixing any `go vet` issues and data races.
+
+### Steps taken
+
+| Step | Command | Result |
+|------|---------|--------|
+| 1 | `go test ./... -count=1` | 141 passed, 0 failed, 6 skipped -- already clean |
+| 2 | `go vet ./...` | No issues found -- already clean |
+| 3 | `go test -race ./... -count=1 -timeout=120s` | No data races detected -- already clean |
+| 4 | `go test ./... -count=1 -timeout=120s` (final confirm) | 141 passed, 0 failed, 6 skipped |
+
+### Fixes applied
+
+None required. The suite entered Phase B in a fully clean state:
+- `go vet` reported zero issues across all packages.
+- The race detector found zero data races in all packages including `internal/daemon` (goroutine-based) and `internal/store` (SQLite).
+- All 141 tests passed; the 6 skips are environment-gated (Ollama / API key) and were already documented in Phase A.
+
+The test count increased from 87 (Phase A) to 141 (Phase B) because Phase A counted top-level test functions only, while Phase B counts every sub-test expanded by `go test -v`, reflecting table-driven subtests across packages such as `plugins/no-prod-secrets`.
+
+### Baseline commit
+
+`f7c97d9` -- test: Phase A audit -- test inventory and coverage report
+
+### Final test count (Phase B)
+
+**141 passed, 0 failed, 6 skipped**
