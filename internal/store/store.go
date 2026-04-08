@@ -66,6 +66,52 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
+// AllSessions returns all sessions ordered by started_at ascending.
+func (s *Store) AllSessions() ([]model.Session, error) {
+	rows, err := s.db.Query(
+		`SELECT id, started_at, ended_at, cwd, git_head_start, git_head_end, model
+		 FROM sessions ORDER BY started_at ASC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var sessions []model.Session
+	for rows.Next() {
+		var sess model.Session
+		if err := rows.Scan(
+			&sess.ID, &sess.StartedAt, &sess.EndedAt,
+			&sess.CWD, &sess.GitHeadStart, &sess.GitHeadEnd, &sess.Model,
+		); err != nil {
+			return nil, err
+		}
+		sessions = append(sessions, sess)
+	}
+	return sessions, rows.Err()
+}
+
+// PromptsForSession returns all prompts for a session ordered by timestamp.
+func (s *Store) PromptsForSession(sessionID string) ([]model.Prompt, error) {
+	rows, err := s.db.Query(
+		`SELECT id, session_id, timestamp, content, content_hash
+		 FROM prompts WHERE session_id = ? ORDER BY timestamp ASC`,
+		sessionID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var prompts []model.Prompt
+	for rows.Next() {
+		var p model.Prompt
+		if err := rows.Scan(&p.ID, &p.SessionID, &p.Timestamp, &p.Content, &p.ContentHash); err != nil {
+			return nil, err
+		}
+		prompts = append(prompts, p)
+	}
+	return prompts, rows.Err()
+}
+
 // InsertSession inserts a new session row.
 func (s *Store) InsertSession(sess model.Session) error {
 	_, err := s.db.Exec(
