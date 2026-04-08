@@ -31,14 +31,14 @@ func TestMigrate_CleanDB(t *testing.T) {
 		t.Fatalf("Migrate on clean db: %v", err)
 	}
 
-	// Verify meta table exists and has schema_version = 1.
+	// Verify meta table exists and has schema_version = 2.
 	var ver string
 	err := db.QueryRow(`SELECT value FROM meta WHERE key = 'schema_version'`).Scan(&ver)
 	if err != nil {
 		t.Fatalf("read schema_version: %v", err)
 	}
-	if ver != "1" {
-		t.Errorf("schema_version = %q, want %q", ver, "1")
+	if ver != "2" {
+		t.Errorf("schema_version = %q, want %q", ver, "2")
 	}
 
 	// Verify intent_matches table exists.

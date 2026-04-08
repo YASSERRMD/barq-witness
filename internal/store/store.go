@@ -75,7 +75,8 @@ func (s *Store) Close() error {
 // AllSessions returns all sessions ordered by started_at ascending.
 func (s *Store) AllSessions() ([]model.Session, error) {
 	rows, err := s.db.Query(
-		`SELECT id, started_at, ended_at, cwd, git_head_start, git_head_end, model
+		`SELECT id, started_at, ended_at, cwd, git_head_start, git_head_end, model,
+		        COALESCE(source, 'claude-code')
 		 FROM sessions ORDER BY started_at ASC`,
 	)
 	if err != nil {
@@ -88,6 +89,7 @@ func (s *Store) AllSessions() ([]model.Session, error) {
 		if err := rows.Scan(
 			&sess.ID, &sess.StartedAt, &sess.EndedAt,
 			&sess.CWD, &sess.GitHeadStart, &sess.GitHeadEnd, &sess.Model,
+			&sess.Source,
 		); err != nil {
 			return nil, err
 		}
@@ -120,11 +122,15 @@ func (s *Store) PromptsForSession(sessionID string) ([]model.Prompt, error) {
 
 // InsertSession inserts a new session row.
 func (s *Store) InsertSession(sess model.Session) error {
+	src := sess.Source
+	if src == "" {
+		src = "claude-code"
+	}
 	_, err := s.db.Exec(
-		`INSERT INTO sessions (id, started_at, ended_at, cwd, git_head_start, git_head_end, model)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO sessions (id, started_at, ended_at, cwd, git_head_start, git_head_end, model, source)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		sess.ID, sess.StartedAt, sess.EndedAt,
-		sess.CWD, sess.GitHeadStart, sess.GitHeadEnd, sess.Model,
+		sess.CWD, sess.GitHeadStart, sess.GitHeadEnd, sess.Model, src,
 	)
 	return err
 }

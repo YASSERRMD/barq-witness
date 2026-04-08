@@ -49,6 +49,73 @@ func Migrate(db *sql.DB) error {
 		}
 	}
 
+	// Migration 2: add source column to sessions table.
+	if version < 2 {
+		if err := addSourceColumn(db); err != nil {
+			return fmt.Errorf("migrate v2: add source column: %w", err)
+		}
+		if err := setSchemaVersion(db, 2); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// addSourceColumn adds the source column to the sessions table if it does not
+// already exist.  It uses PRAGMA table_info to check safely before running
+// the ALTER TABLE statement.  If the sessions table does not yet exist (e.g.
+// when Migrate is called before the schema is applied) the function is a
+// no-op; the column will be present when the schema is later applied because
+// schema.sql is updated separately.
+func addSourceColumn(db *sql.DB) error {
+	// Check whether the sessions table exists at all.
+	var tableName string
+	err := db.QueryRow(
+		`SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'`,
+	).Scan(&tableName)
+	if errors.Is(err, sql.ErrNoRows) {
+		// Sessions table does not exist yet -- skip; schema creation handles it.
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("check sessions table: %w", err)
+	}
+
+	rows, err := db.Query(`PRAGMA table_info(sessions)`)
+	if err != nil {
+		return fmt.Errorf("table_info: %w", err)
+	}
+	defer rows.Close()
+
+	exists := false
+	for rows.Next() {
+		// PRAGMA table_info columns: cid, name, type, notnull, dflt_value, pk
+		var cid int
+		var name, colType string
+		var notNull int
+		var dflt interface{}
+		var pk int
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dflt, &pk); err != nil {
+			return fmt.Errorf("scan table_info row: %w", err)
+		}
+		if name == "source" {
+			exists = true
+			break
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	if exists {
+		return nil
+	}
+
+	_, err = db.Exec(`ALTER TABLE sessions ADD COLUMN source TEXT DEFAULT 'claude-code'`)
+	if err != nil {
+		return fmt.Errorf("alter table: %w", err)
+	}
 	return nil
 }
 

@@ -16,7 +16,7 @@ import (
 )
 
 // Version is the CGPF spec version this package implements.
-const Version = "0.2"
+const Version = "0.3"
 
 // BinaryVersion is set by the main package at build time.
 var BinaryVersion = "vDEV"
@@ -46,17 +46,18 @@ type CommitRange struct {
 
 // Session is the per-session export structure.
 type Session struct {
-	ID             string               `json:"id"`
-	StartedAt      string               `json:"started_at"`
-	EndedAt        *string              `json:"ended_at"`
-	Model          string               `json:"model"`
-	CWD            string               `json:"cwd"`
-	GitHeadStart   string               `json:"git_head_start"`
-	GitHeadEnd     *string              `json:"git_head_end"`
-	Prompts        []Prompt             `json:"prompts"`
-	Edits          []Edit               `json:"edits"`
-	Executions     []Execution          `json:"executions"`
-	IntentMatches  []IntentMatchRecord  `json:"intent_matches,omitempty"`
+	ID            string              `json:"id"`
+	StartedAt     string              `json:"started_at"`
+	EndedAt       *string             `json:"ended_at"`
+	Model         string              `json:"model"`
+	Source        string              `json:"source"`
+	CWD           string              `json:"cwd"`
+	GitHeadStart  string              `json:"git_head_start"`
+	GitHeadEnd    *string             `json:"git_head_end"`
+	Prompts       []Prompt            `json:"prompts"`
+	Edits         []Edit              `json:"edits"`
+	Executions    []Execution         `json:"executions"`
+	IntentMatches []IntentMatchRecord `json:"intent_matches,omitempty"`
 }
 
 // IntentMatchRecord is the CGPF intent match record per edit.
@@ -175,10 +176,15 @@ func Unmarshal(data []byte) (*Document, error) {
 // ---- internal helpers -------------------------------------------------------
 
 func exportSession(st *store.Store, sess model.Session, opts ExportOptions) (Session, error) {
+	src := sess.Source
+	if src == "" {
+		src = "claude-code"
+	}
 	out := Session{
 		ID:           sess.ID,
 		StartedAt:    msToISO(sess.StartedAt),
 		Model:        sess.Model,
+		Source:       src,
 		CWD:          sess.CWD,
 		GitHeadStart: sess.GitHeadStart,
 	}

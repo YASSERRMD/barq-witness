@@ -21,12 +21,16 @@ import (
 
 	"github.com/sergi/go-diff/diffmatchpatch"
 
+	"github.com/yasserrmd/barq-witness/internal/adapters/claudecode"
 	"github.com/yasserrmd/barq-witness/internal/daemon"
 	"github.com/yasserrmd/barq-witness/internal/hooks"
 	"github.com/yasserrmd/barq-witness/internal/model"
 	"github.com/yasserrmd/barq-witness/internal/store"
 	"github.com/yasserrmd/barq-witness/internal/util"
 )
+
+// ccAdapter is the Claude Code adapter used by all record subcommands.
+var ccAdapter = claudecode.New()
 
 // runRecord dispatches to the correct record subcommand.
 // It never returns a non-zero exit; all errors are logged.
@@ -154,14 +158,7 @@ func recordSessionStart(data []byte, dbPath, witnessDir string, logger interface
 	s := openStore(dbPath, logger)
 	defer s.Close()
 
-	sess := model.Session{
-		ID:           p.SessionID,
-		StartedAt:    time.Now().UnixMilli(),
-		CWD:          cwd,
-		GitHeadStart: head,
-		Model:        p.Model,
-	}
-	if err := s.InsertSession(sess); err != nil {
+	if err := ccAdapter.RecordSession(s, p.SessionID, cwd, p.Model, head); err != nil {
 		logger.Printf("session-start: insert: %v", err)
 	}
 }
